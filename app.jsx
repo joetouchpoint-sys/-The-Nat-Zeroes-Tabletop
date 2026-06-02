@@ -4,6 +4,21 @@
 
   function lsGet(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
   function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+
+  class ErrorBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { err: null }; }
+    static getDerivedStateFromError(e) { return { err: e }; }
+    render() {
+      if (this.state.err) {
+        return React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 20, background: "var(--bg)", color: "var(--ink)" } },
+          React.createElement("div", { style: { fontSize: 48 } }, "💀"),
+          React.createElement("h2", { style: { fontFamily: "var(--display)", color: "var(--gold)" } }, "A critical fail"),
+          React.createElement("p", { style: { color: "var(--ink-soft)", maxWidth: 400, textAlign: "center" } }, this.state.err.message || "Something broke. The dungeon master is looking into it."),
+          React.createElement("button", { className: "btn primary", onClick: () => { this.setState({ err: null }); } }, "Try again"));
+      }
+      return this.props.children;
+    }
+  }
   const Icon = window.Icon;
   const { Avatar } = window.NZUI;
   const D = window.NZ;
@@ -92,7 +107,8 @@
               React.createElement("span", { className: "tag", style: { fontSize: 10, color: roleInfo.color, borderColor: roleInfo.color + "55", background: roleInfo.color + "1a" } }, roleInfo.short)),
             React.createElement("button", { className: "icon-btn", title: "Notifications" }, React.createElement(Icon, { name: "bell", size: 18 }))),
 
-          React.createElement("div", { className: "view", key: view },
+          React.createElement(ErrorBoundary, { key: view },
+          React.createElement("div", { className: "view" },
             view === "home" && React.createElement(window.Dashboard, { data: Object.assign({}, D, { recaps, campaign }), go, user, onCampaignSave: setCampaign }),
             view === "map" && React.createElement(window.BattleMap, { maps: D.maps, party: D.party, bestiary: D.bestiary, dm: D.dm, initialMapId: pendingMap }),
             view === "world" && React.createElement(window.World, { locations: D.locations, maps: D.maps, onOpenMap: openMap, bgImg: worldBgImg, onBgImgChange: saveWorldBg }),
@@ -103,7 +119,7 @@
             view === "recaps" && React.createElement(Recaps, { recaps, setRecaps, stats: D.stats }),
             view === "chatzeros" && React.createElement(window.ChatZeroes, { chatStats, setChatStats, awards, setAwards, quotes, setQuotes, party: D.party }),
             view === "extras" && React.createElement(Extras, { recaps, stats: D.stats, go }),
-            view === "accounts" && React.createElement(Auth.AccountsView))),
+            view === "accounts" && React.createElement(Auth.AccountsView)))),
 
         React.createElement(Auth.AccountSwitcher, { open: switchOpen, onClose: () => setSwitchOpen(false), current: user, onSwitch: setUser }),
         window.NZTweaks && React.createElement(window.NZTweaks)));

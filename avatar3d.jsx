@@ -68,9 +68,9 @@
   };
 
   // ---------------- materials ----------------
-  function smat(color, o) { return new T.MeshStandardMaterial(Object.assign({ color, roughness: 0.62, metalness: 0.04 }, o || {})); }
-  function metal(color, rough) { return new T.MeshStandardMaterial({ color, roughness: rough || 0.32, metalness: 0.9 }); }
-  function cloth(color) { return new T.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0 }); }
+  function smat(color, o) { return new T.MeshStandardMaterial(Object.assign({ color, roughness: 0.55, metalness: 0.0 }, o || {})); }
+  function metal(color, rough) { return new T.MeshStandardMaterial({ color, roughness: rough !== undefined ? rough : 0.28, metalness: 0.92 }); }
+  function cloth(color) { return new T.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0 }); }
 
   // ---------------- geometry helpers ----------------
   function capsuleGeo(r, len, radial) {
@@ -142,11 +142,16 @@
     const armMat = c.outfit === "plate" ? metal(c.primary, 0.4) : (c.outfit === "robe" ? cloth(c.primary) : primMat);
     const shoulderX = 0.30 * bw;
     [-1, 1].forEach((s) => {
-      add(sphere(0.115 * bw, armMat), s * shoulderX, 1.46, 0);
+      add(sphere(0.115 * bw, armMat), s * shoulderX, 1.46, 0.02);
       if (c.shoulders) { const pad = add(sphere(0.15 * bw, c.outfit === "plate" ? trimMat : secMat), s * shoulderX, 1.5, 0); pad.scale.set(1.1, 0.8, 1.1); }
-      const upper = add(limb(0.082 * bw, 0.34, armMat), s * (shoulderX + 0.04), 1.27, 0); upper.rotation.z = s * 0.12;
-      const fore = add(limb(0.072 * bw, 0.32, c.gloves ? secMat : skinMat.clone()), s * (shoulderX + 0.085), 0.93, 0); fore.rotation.z = s * 0.14;
-      const hand = add(sphere(0.078, c.gloves ? smat(shade(c.secondary, -0.05)) : skinMat.clone()), s * (shoulderX + 0.11), 0.74, 0.01);
+      // Upper arm: slight outward + forward tilt (natural relaxed pose)
+      const upper = add(limb(0.082 * bw, 0.34, armMat), s * (shoulderX + 0.04), 1.27, 0.02);
+      upper.rotation.z = s * 0.12; upper.rotation.x = 0.08;
+      // Forearm: angled more forward — brings hand in front of torso
+      const fore = add(limb(0.072 * bw, 0.32, c.gloves ? secMat : skinMat.clone()), s * (shoulderX + 0.08), 0.93, 0.08);
+      fore.rotation.z = s * 0.14; fore.rotation.x = 0.18;
+      // Hand: now clearly forward of the torso (z≈0.16)
+      const hand = add(sphere(0.082, c.gloves ? smat(shade(c.secondary, -0.05)) : skinMat.clone()), s * (shoulderX + 0.10), 0.75, 0.16);
       g.userData[s < 0 ? "handL" : "handR"] = hand.position.clone();
     });
 
@@ -159,14 +164,18 @@
     if (c.race === "elf" || c.race === "halfelf") [-1, 1].forEach((s) => { const e = add(new T.Mesh(new T.ConeGeometry(0.045, 0.16, 10), skinMat.clone()), s * headR * 0.95, 1.84, -0.02); e.rotation.z = s * -0.6; e.rotation.x = -0.3; });
     else [-1, 1].forEach((s) => { const e = add(sphere(0.05, skinMat.clone(), 12), s * headR * 0.98, 1.78, 0); e.scale.set(0.5, 1, 0.7); });
 
-    // eyes — pushed out past the head sphere surface (headR * 1.1+)
+    // eyes — larger, more expressive
     [-1, 1].forEach((s) => {
-      const white = add(sphere(0.052, smat("#f5f0e6"), 16), s * 0.077, 1.796, headR * 1.1); white.scale.set(1, 1.18, 0.6);
-      add(sphere(0.032, smat(c.eyeColor, { roughness: 0.25 }), 16), s * 0.077, 1.79, headR * 1.15);
-      add(sphere(0.016, smat("#0a0806"), 12), s * 0.077, 1.79, headR * 1.19);
-      // catchlight
-      add(sphere(0.006, smat("#ffffff", { roughness: 0.1 }), 8), s * 0.083, 1.797, headR * 1.2);
-      if (c.brows) { const b = add(new T.Mesh(new T.BoxGeometry(0.076, 0.019, 0.028), hairMat), s * 0.077, 1.862, headR * 1.12); b.rotation.z = s * -0.12; }
+      const white = add(sphere(0.062, smat("#f8f4f0"), 20), s * 0.076, 1.798, headR * 1.08); white.scale.set(1, 1.22, 0.58);
+      add(sphere(0.040, smat(c.eyeColor, { roughness: 0.18, metalness: 0.05 }), 20), s * 0.076, 1.791, headR * 1.13);
+      add(sphere(0.022, smat("#080604"), 14), s * 0.076, 1.792, headR * 1.17);
+      // two catchlights for depth
+      add(sphere(0.009, smat("#ffffff", { roughness: 0.05 }), 8), s * 0.083, 1.800, headR * 1.19);
+      add(sphere(0.005, smat("#ffffff", { roughness: 0.05 }), 6), s * 0.070, 1.796, headR * 1.19);
+      if (c.brows) {
+        const b = add(new T.Mesh(new T.BoxGeometry(0.082, 0.022, 0.030), hairMat), s * 0.076, 1.868, headR * 1.10);
+        b.rotation.z = s * -0.14;
+      }
     });
     // nose + mouth
     const nose = add(sphere(0.026, skinMat.clone(), 18), 0, 1.757, headR * 1.14); nose.scale.set(0.85, 0.78, 0.9);
@@ -337,8 +346,8 @@
     const grp = new T.Group(); grp.position.copy(hand);
     const steel = metal("#cdd3da", 0.28), gold = metal(c.trim, 0.35), wood = smat("#6b4423", { roughness: 0.8 });
     switch (weapon) {
-      case "sword": grp.add(meshAt(capsuleGeo(0.022, 0.18), wood, 0, -0.02, 0)); grp.add(meshAt(new T.BoxGeometry(0.2, 0.045, 0.05), gold, 0, 0.1, 0)); grp.add(meshAt(bladeGeo(0.07, 0.7), steel, 0, 0.48, 0)); break;
-      case "greatsword": grp.add(meshAt(capsuleGeo(0.026, 0.28), wood, 0, -0.04, 0)); grp.add(meshAt(new T.BoxGeometry(0.28, 0.05, 0.06), gold, 0, 0.14, 0)); grp.add(meshAt(bladeGeo(0.1, 1.1), steel, 0, 0.74, 0)); break;
+      case "sword": grp.add(meshAt(capsuleGeo(0.022, 0.2), wood, 0, -0.02, 0)); grp.add(meshAt(new T.BoxGeometry(0.22, 0.04, 0.045), gold, 0, 0.11, 0)); grp.add(meshAt(bladeGeo(0.048, 0.72), steel, 0, 0.50, 0)); break;
+      case "greatsword": grp.add(meshAt(capsuleGeo(0.026, 0.32), wood, 0, -0.04, 0)); grp.add(meshAt(new T.BoxGeometry(0.30, 0.04, 0.048), gold, 0, 0.15, 0)); grp.add(meshAt(bladeGeo(0.07, 1.15), steel, 0, 0.78, 0)); break;
       case "staff": grp.add(meshAt(capsuleGeo(0.03, 1.4), wood, 0, 0.35, 0)); grp.add(meshAt(new T.IcosahedronGeometry(0.09, 0), new T.MeshStandardMaterial({ color: "#7fd0ff", emissive: "#2a7dd0", emissiveIntensity: 0.9, roughness: 0.15 }), 0, 1.12, 0)); break;
       case "wand": grp.add(meshAt(capsuleGeo(0.018, 0.34), wood, 0, 0.12, 0)); grp.add(meshAt(sphereGeo(0.045), new T.MeshStandardMaterial({ color: "#e89cff", emissive: "#9a2ad0", emissiveIntensity: 0.9 }), 0, 0.32, 0)); break;
       case "axe": grp.add(meshAt(capsuleGeo(0.028, 0.85), wood, 0, 0.3, 0)); { const blade = new T.Mesh(new T.CylinderGeometry(0.16, 0.16, 0.04, 24, 1, false, -0.6, 1.2), metal("#aab0ba", 0.3)); blade.rotation.x = Math.PI / 2; blade.position.set(0.08, 0.6, 0); grp.add(blade); } break;
@@ -347,8 +356,7 @@
       case "spear": grp.add(meshAt(capsuleGeo(0.024, 1.5), wood, 0, 0.4, 0)); grp.add(meshAt(new T.ConeGeometry(0.06, 0.26, 10), steel, 0, 1.2, 0)); break;
     }
     grp.traverse((m) => { if (m.isMesh) m.castShadow = true; });
-    grp.rotation.x = -0.12;
-    grp.position.z += 0.07; // move weapon forward to avoid shoulder clipping
+    grp.rotation.x = -0.05; // minimal backward tilt — hand is already forward
     g.add(grp);
   }
   function buildOffhand(g, off, hand, c) {
@@ -365,7 +373,22 @@
     grp.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     g.add(grp);
   }
-  function bladeGeo(w, len) { const g = new T.BoxGeometry(w, len, 0.022); return g; }
+  function bladeGeo(w, len) {
+    // Tapered blade: wide at base, pointed at tip
+    const g = new T.BufferGeometry();
+    const h = len / 2, t = 0.014;
+    const verts = new Float32Array([
+      -w/2, -h, t/2,   w/2, -h, t/2,   0, h, 0,   // front face
+      w/2, -h, t/2,   w/2, -h, -t/2,  0, h, 0,    // right bevel
+      w/2, -h, -t/2, -w/2, -h, -t/2,  0, h, 0,    // back face
+      -w/2, -h, -t/2, -w/2, -h, t/2,  0, h, 0,    // left bevel
+      -w/2, -h, t/2,  w/2, -h, t/2,  w/2,-h,-t/2, // base
+      -w/2, -h, t/2,  w/2,-h,-t/2, -w/2,-h,-t/2,  // base
+    ]);
+    g.setAttribute("position", new T.BufferAttribute(verts, 3));
+    g.computeVertexNormals();
+    return g;
+  }
   function sphereGeo(r) { return new T.SphereGeometry(r, 16, 14); }
 
   function shade(hex, amt) { const c = new T.Color(hex); const hsl = {}; c.getHSL(hsl); c.setHSL(hsl.h, hsl.s, Math.max(0, Math.min(1, hsl.l + amt))); return "#" + c.getHexString(); }

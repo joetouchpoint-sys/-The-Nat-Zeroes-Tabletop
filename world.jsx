@@ -1,6 +1,18 @@
 /* WORLD MAP — discovered locations, draggable pins, custom background */
 (function () {
   const { useState, useContext, useRef } = React;
+
+  function compressImage(dataUrl, maxPx, quality, cb) {
+    const img = new Image();
+    img.onload = function() {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      cb(cv.toDataURL("image/jpeg", quality));
+    };
+    img.src = dataUrl;
+  }
   const Icon = window.Icon;
   const { Modal } = window.NZUI;
 
@@ -36,7 +48,12 @@
     function handleBgUpload(e) {
       const file = e.target.files[0]; if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => onBgImgChange && onBgImgChange(ev.target.result);
+      reader.onload = (ev) => {
+        // Compress to max 1200px JPEG so it fits in localStorage (~300KB)
+        compressImage(ev.target.result, 1200, 0.82, (compressed) => {
+          onBgImgChange && onBgImgChange(compressed);
+        });
+      };
       reader.readAsDataURL(file);
     }
 

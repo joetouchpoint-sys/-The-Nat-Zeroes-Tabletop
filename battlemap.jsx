@@ -118,13 +118,15 @@
 
     // ---- pointer handling on the grid ----
     function cellFromEvent(e) {
+      if (!stageRef.current) return { c: 0, r: 0, x: 0, y: 0 };
       const r = stageRef.current.getBoundingClientRect();
       const x = e.clientX - r.left, y = e.clientY - r.top;
       return { c: Math.floor(x / cell), r: Math.floor(y / cell), x, y };
     }
 
     function onStagePointerDown(e) {
-      if (e.target.closest(".tok")) return; // token handles its own
+      if (e.target.closest(".tok")) return;
+      if (!stageRef.current) return;
       const pos = cellFromEvent(e);
       if (tool === "fog") { paintFog(pos, e.shiftKey); }
       else if (tool === "ping") { dropPing(pos); }
@@ -132,10 +134,14 @@
       else if (tool === "select") { setSelected(null); }
     }
     function onStagePointerMove(e) {
+      if (!stageRef.current) return;
+      const kind = drag.current ? drag.current.kind : null;
+      if (!kind && tool !== "fog") return; // nothing to do, skip cellFromEvent
       const pos = cellFromEvent(e);
-      if (drag.current?.kind === "measure") setMeasure((m) => m && ({ ...m, to: { x: pos.x, y: pos.y } }));
-      else if (drag.current?.kind === "token") {
-        setTokens((ts) => ts.map((t) => t.uid === drag.current.uid ? { ...t, c: clamp(pos.c, 0, map.cols - 1), r: clamp(pos.r, 0, map.rows - 1) } : t));
+      if (kind === "measure") setMeasure((m) => m && ({ ...m, to: { x: pos.x, y: pos.y } }));
+      else if (kind === "token") {
+        const uid = drag.current.uid;
+        setTokens((ts) => ts.map((t) => t.uid === uid ? { ...t, c: clamp(pos.c, 0, map.cols - 1), r: clamp(pos.r, 0, map.rows - 1) } : t));
       }
       else if (tool === "fog" && (e.buttons & 1)) paintFog(pos, e.shiftKey);
     }
@@ -480,8 +486,21 @@
     useEffect(() => { if (open) { setName(""); setImg(null); setPreset("dungeon"); } }, [open]);
     function pickFile(e) {
       const f = e.target.files?.[0]; if (!f) return;
-      const url = URL.createObjectURL(f); setImg(url);
       if (!name) setName(f.name.replace(/\.[^.]+$/, ""));
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const raw = ev.target.result;
+        const img2 = new Image();
+        img2.onload = function() {
+          const scale = Math.min(1, 1400 / Math.max(img2.width, img2.height));
+          const w = Math.round(img2.width * scale), h = Math.round(img2.height * scale);
+          const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+          cv.getContext("2d").drawImage(img2, 0, 0, w, h);
+          setImg(cv.toDataURL("image/jpeg", 0.84));
+        };
+        img2.src = raw;
+      };
+      reader.readAsDataURL(f);
     }
     function create() {
       onUpload({ id: "m" + Date.now(), name: name || "Untitled Map", bg: preset, img, cols, rows, grid: 28, note: "Freshly conjured" });
