@@ -5,16 +5,43 @@
   function lsGet(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
   function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
 
+  // IndexedDB helpers for large blobs (images) — no size limit unlike localStorage
+  function dbSave(key, val) {
+    try {
+      const req = indexedDB.open("nzdb", 1);
+      req.onupgradeneeded = (e) => { try { e.target.result.createObjectStore("kv"); } catch(e2) {} };
+      req.onsuccess = (e) => {
+        try { const tx = e.target.result.transaction("kv", "readwrite"); tx.objectStore("kv").put(val, key); } catch(e2) {}
+      };
+    } catch(e) {}
+  }
+  function dbLoad(key, cb) {
+    try {
+      const req = indexedDB.open("nzdb", 1);
+      req.onupgradeneeded = (e) => { try { e.target.result.createObjectStore("kv"); } catch(e2) {} };
+      req.onsuccess = (e) => {
+        try {
+          const r = e.target.result.transaction("kv", "readonly").objectStore("kv").get(key);
+          r.onsuccess = () => cb(r.result || null);
+          r.onerror = () => cb(null);
+        } catch(e2) { cb(null); }
+      };
+      req.onerror = () => cb(null);
+    } catch(e) { cb(null); }
+  }
+
+  // Error boundary — uses position:fixed so it's visible regardless of parent CSS
   class ErrorBoundary extends React.Component {
     constructor(props) { super(props); this.state = { err: null }; }
     static getDerivedStateFromError(e) { return { err: e }; }
+    componentDidCatch(e, info) { console.error("[NZ Error]", e, info); }
     render() {
       if (this.state.err) {
-        return React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 20, background: "var(--bg)", color: "var(--ink)" } },
+        return React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, background: "var(--bg)", color: "var(--ink)" } },
           React.createElement("div", { style: { fontSize: 48 } }, "💀"),
           React.createElement("h2", { style: { fontFamily: "var(--display)", color: "var(--gold)" } }, "A critical fail"),
-          React.createElement("p", { style: { color: "var(--ink-soft)", maxWidth: 400, textAlign: "center" } }, this.state.err.message || "Something broke. The dungeon master is looking into it."),
-          React.createElement("button", { className: "btn primary", onClick: () => { this.setState({ err: null }); } }, "Try again"));
+          React.createElement("p", { style: { color: "var(--ink-soft)", maxWidth: 400, textAlign: "center" } }, String((this.state.err && this.state.err.message) || "Something broke.")),
+          React.createElement("button", { className: "btn primary", onClick: () => this.setState({ err: null }) }, "Try again"));
       }
       return this.props.children;
     }
@@ -49,8 +76,9 @@
     const [chatStats, setChatStats] = useState(() => lsGet("nz_chatstats", D.chatStats));
     const [awards, setAwards]       = useState(() => lsGet("nz_awards",    D.awards));
     const [quotes, setQuotes]       = useState(() => lsGet("nz_quotes",    []));
-    const [worldBgImg, setWorldBgImg] = useState(() => { try { return localStorage.getItem("nz_worldbg") || null; } catch(e) { return null; } });
-    function saveWorldBg(img) { setWorldBgImg(img); try { if (img) localStorage.setItem("nz_worldbg", img); else localStorage.removeItem("nz_worldbg"); } catch(e) {} }
+    const [worldBgImg, setWorldBgImg] = useState(null);
+    useEffect(() => { dbLoad("nz_worldbg", (img) => { if (img) setWorldBgImg(img); }); }, []);
+    function saveWorldBg(img) { setWorldBgImg(img); dbSave("nz_worldbg", img || null); }
 
     useEffect(() => { lsSet("nz_recaps",    recaps);    }, [recaps]);
     useEffect(() => { lsSet("nz_campaign",  campaign);  }, [campaign]);

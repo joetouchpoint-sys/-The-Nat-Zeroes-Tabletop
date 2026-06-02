@@ -125,25 +125,32 @@
     }
 
     function onStagePointerDown(e) {
-      if (e.target.closest(".tok")) return;
-      if (!stageRef.current) return;
-      const pos = cellFromEvent(e);
-      if (tool === "fog") { paintFog(pos, e.shiftKey); }
-      else if (tool === "ping") { dropPing(pos); }
-      else if (tool === "measure") { setMeasure({ from: { x: pos.x, y: pos.y }, to: { x: pos.x, y: pos.y } }); drag.current = { kind: "measure" }; }
-      else if (tool === "select") { setSelected(null); }
+      try {
+        if (e.target.closest(".tok")) return;
+        if (!stageRef.current) return;
+        const pos = cellFromEvent(e);
+        if (tool === "fog") { paintFog(pos, e.shiftKey); }
+        else if (tool === "ping") { dropPing(pos); }
+        else if (tool === "measure") { setMeasure({ from: { x: pos.x, y: pos.y }, to: { x: pos.x, y: pos.y } }); drag.current = { kind: "measure" }; }
+        else if (tool === "select") { setSelected(null); }
+      } catch(err) { console.error("pointerdown", err); drag.current = null; }
     }
     function onStagePointerMove(e) {
-      if (!stageRef.current) return;
-      const kind = drag.current ? drag.current.kind : null;
-      if (!kind && tool !== "fog") return; // nothing to do, skip cellFromEvent
-      const pos = cellFromEvent(e);
-      if (kind === "measure") setMeasure((m) => m && ({ ...m, to: { x: pos.x, y: pos.y } }));
-      else if (kind === "token") {
-        const uid = drag.current.uid;
-        setTokens((ts) => ts.map((t) => t.uid === uid ? { ...t, c: clamp(pos.c, 0, map.cols - 1), r: clamp(pos.r, 0, map.rows - 1) } : t));
-      }
-      else if (tool === "fog" && (e.buttons & 1)) paintFog(pos, e.shiftKey);
+      try {
+        if (!stageRef.current) return;
+        const d = drag.current;
+        const kind = d ? d.kind : null;
+        if (!kind && tool !== "fog") return;
+        const pos = cellFromEvent(e);
+        if (kind === "measure") {
+          setMeasure((m) => m ? { ...m, to: { x: pos.x, y: pos.y } } : m);
+        } else if (kind === "token" && d) {
+          const uid = d.uid;
+          setTokens((ts) => ts.map((t) => t.uid === uid ? { ...t, c: clamp(pos.c, 0, map.cols - 1), r: clamp(pos.r, 0, map.rows - 1) } : t));
+        } else if (tool === "fog" && (e.buttons & 1)) {
+          paintFog(pos, e.shiftKey);
+        }
+      } catch(err) { console.error("pointermove", err); drag.current = null; }
     }
     function onStagePointerUp() { drag.current = null; }
 
@@ -163,10 +170,12 @@
       setTimeout(() => setPings((p) => p.filter((x) => x.id !== id)), 1600);
     }
     function startTokenDrag(e, t) {
-      if (tool !== "select" || !canMove) return;
-      e.stopPropagation();
-      setSelected(t.uid);
-      drag.current = { kind: "token", uid: t.uid };
+      try {
+        if (tool !== "select" || !canMove) return;
+        e.stopPropagation();
+        setSelected(t.uid);
+        drag.current = { kind: "token", uid: t.uid };
+      } catch(err) { console.error("startTokenDrag", err); drag.current = null; }
     }
 
     // ---- initiative ----

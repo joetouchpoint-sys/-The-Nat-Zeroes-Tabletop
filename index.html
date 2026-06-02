@@ -11,6 +11,16 @@
 </head>
 <body>
 <div id="root"></div>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  if (document.getElementById('nz-err')) return;
+  var d = document.createElement('div');
+  d.id = 'nz-err';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e8412e;color:#fff;padding:12px 20px;z-index:99999;font-family:monospace;font-size:13px;display:flex;align-items:center;gap:16px;';
+  d.innerHTML = '<span>JS Error: ' + (err ? err.message : msg) + ' (line ' + line + ')</span><button onclick="location.reload()" style="background:#fff;color:#e8412e;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:700">Reload</button><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px;margin-left:auto">✕</button>';
+  document.body.appendChild(d);
+};
+</script>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
