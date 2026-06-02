@@ -4,7 +4,7 @@
   var firebaseConfig = {
     apiKey: "AIzaSyAc4OJVMZ3ZvM_HmLfvMw9JWEeu9UDHOA8",
     authDomain: "nat-zeroes.firebaseapp.com",
-    databaseURL: "https://nat-zeroes-default-rtdb.firebaseio.com",
+    databaseURL: "https://nat-zeroes-default-rtdb.europe-west1.firebasedatabase.app",
     projectId: "nat-zeroes",
     storageBucket: "nat-zeroes.firebasestorage.app",
     messagingSenderId: "92379774362",
