@@ -36,7 +36,12 @@
     const ctx = useContext(window.NZAuth.RoleContext);
     const canEdit = ctx.can("fog");        // DM / admin
     const canMove = ctx.can("moveTokens"); // DM / admin / player
-    const [mapList, setMapList] = useState(maps);
+    const [mapList, setMapList] = useState(() => {
+      try {
+        const custom = JSON.parse(localStorage.getItem("nz_custommaps") || "[]");
+        return custom.length ? [...maps, ...custom] : maps;
+      } catch(e) { return maps; }
+    });
     const [activeMapId, setActiveMapId] = useState(initialMapId || maps[0].id);
     const map = mapList.find((m) => m.id === activeMapId) || mapList[0];
     useEffect(() => { if (initialMapId && mapList.some((m) => m.id === initialMapId)) setActiveMapId(initialMapId); }, [initialMapId]);
@@ -189,7 +194,13 @@
     }
 
     function handleUpload(newMap) {
-      setMapList((l) => [...l, newMap]);
+      setMapList((l) => {
+        const next = [...l, newMap];
+        // Persist only custom maps (not the default seeded ones)
+        const defaultIds = new Set(maps.map((m) => m.id));
+        try { localStorage.setItem("nz_custommaps", JSON.stringify(next.filter((m) => !defaultIds.has(m.id)))); } catch(e) {}
+        return next;
+      });
       setTokensByMap((s) => ({ ...s, [newMap.id]: [] }));
       setActiveMapId(newMap.id);
       setUploadOpen(false);

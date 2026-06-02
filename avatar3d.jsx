@@ -126,7 +126,8 @@
 
     // ---- robe skirt (for robe outfit) ----
     if (c.outfit === "robe") {
-      const skirt = add(new T.Mesh(robeGeo(0.22 * bw, 0.42 * bw, 0.95), cloth(c.primary)), 0, 0.5, 0);
+      // Skirt positioned to overlap legs completely without showing gap
+      add(new T.Mesh(robeGeo(0.24 * bw, 0.44 * bw, 1.05), cloth(c.primary)), 0, 0.44, 0);
     }
 
     // ---- torso ----
@@ -317,7 +318,16 @@
     geo.computeVertexNormals();
     const mat = new T.MeshStandardMaterial({ color: c.capeColor, roughness: 0.85, metalness: 0, side: T.DoubleSide });
     const cape = new T.Mesh(geo, mat); cape.position.set(0, 1.42, -0.16 * bw); cape.rotation.x = 0.12; cape.castShadow = true; g.add(cape);
-    if (c.cape === "hooded") { const hood = new T.Mesh(new T.SphereGeometry(0.26, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.6), mat); hood.position.set(0, 1.74, -0.12); hood.scale.set(1.1, 1.15, 1.2); g.add(hood); }
+    if (c.cape === "hooded") {
+      // Closed dome for hooded cape (thetaLength 0.5PI = upper hemisphere only, no open ring)
+      const hR = 0.25, hTh = Math.PI * 0.52;
+      const hood = new T.Mesh(new T.SphereGeometry(hR, 24, 18, 0, Math.PI * 2, 0, hTh), mat);
+      hood.position.set(0, 1.80, -0.14); hood.scale.set(1.14, 1.22, 1.28); g.add(hood);
+      // Closing disc
+      const dR = Math.sin(hTh) * hR, dY = 1.80 + Math.cos(hTh) * hR;
+      const hd = new T.Mesh(new T.CircleGeometry(dR * 1.14, 22), mat);
+      hd.rotation.x = Math.PI / 2; hd.position.set(0, dY * 1.0, -0.14); g.add(hd);
+    }
   }
 
   function meshAt(geo, m, x, y, z) { const me = new T.Mesh(geo, m); me.position.set(x, y, z); me.castShadow = true; return me; }
@@ -373,55 +383,139 @@
 
     const camera = new T.PerspectiveCamera(36, w / h, 0.1, 100);
 
-    scene.add(new T.HemisphereLight(0xcdbcff, 0x2a2036, 0.85));
-    const key = new T.DirectionalLight(0xfff2dc, 1.3); key.position.set(3, 6, 5);
-    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.near = 1; key.shadow.camera.far = 22;
-    key.shadow.camera.left = -3; key.shadow.camera.right = 3; key.shadow.camera.top = 4; key.shadow.camera.bottom = -1; key.shadow.bias = -0.0005;
+    scene.add(new T.HemisphereLight(0xa090cc, 0x1a1024, 0.6));
+    const key = new T.DirectionalLight(0xfff5e8, 1.5); key.position.set(2.5, 7, 5);
+    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.near = 0.5; key.shadow.camera.far = 24;
+    key.shadow.camera.left = -2.5; key.shadow.camera.right = 2.5; key.shadow.camera.top = 4; key.shadow.camera.bottom = -0.5; key.shadow.bias = -0.0003;
     scene.add(key);
-    const rim = new T.DirectionalLight(0xe8623e, 0.55); rim.position.set(-5, 3, -4); scene.add(rim);
-    const fill = new T.PointLight(0x9170f0, 0.55, 24); fill.position.set(-3, 2, 4); scene.add(fill);
+    const rim = new T.DirectionalLight(0xe8623e, 0.7); rim.position.set(-4, 2, -3); scene.add(rim);
+    const fillL = new T.DirectionalLight(0x7050d0, 0.4); fillL.position.set(4, 1, 2); scene.add(fillL);
+    const fill = new T.PointLight(0x9170f0, 0.6, 18); fill.position.set(-2.5, 2.5, 3); scene.add(fill);
 
     if (opts.ground !== false) {
-      // ---- Stone floor platform ----
-      const floorMat = new T.MeshStandardMaterial({ color: 0x1a1520, roughness: 0.96 });
-      const floor = new T.Mesh(new T.CylinderGeometry(3.5, 3.5, 0.14, 40), floorMat);
-      floor.position.y = -0.08; floor.receiveShadow = true; scene.add(floor);
-      // Gold trim ring
-      const trimRing = new T.Mesh(new T.TorusGeometry(3.48, 0.022, 8, 64), new T.MeshStandardMaterial({ color: "#b07f30", emissive: "#b07f30", emissiveIntensity: 0.3, roughness: 0.4 }));
-      trimRing.rotation.x = Math.PI / 2; trimRing.position.y = -0.01; scene.add(trimRing);
-      // Inner ring
-      const innerRing = new T.Mesh(new T.TorusGeometry(1.1, 0.016, 8, 48), new T.MeshStandardMaterial({ color: "#9170f0", emissive: "#9170f0", emissiveIntensity: 0.4, roughness: 0.4 }));
-      innerRing.rotation.x = Math.PI / 2; innerRing.position.y = -0.01; scene.add(innerRing);
+      scene.fog = new T.FogExp2(0x0b0910, 0.06);
 
-      // ---- Back wall ----
-      const wallMat = new T.MeshStandardMaterial({ color: 0x141018, roughness: 0.94 });
-      const backWall = new T.Mesh(new T.PlaneGeometry(6, 6), wallMat);
-      backWall.position.set(0, 2.9, -3.4); backWall.receiveShadow = true; scene.add(backWall);
-      // Arch frame over the character
-      const archMat = new T.MeshStandardMaterial({ color: 0x2a2230, roughness: 0.88 });
-      const archBase1 = new T.Mesh(new T.BoxGeometry(0.28, 3.2, 0.28), archMat);
-      archBase1.position.set(-1.0, 1.4, -3.3); scene.add(archBase1);
-      const archBase2 = new T.Mesh(new T.BoxGeometry(0.28, 3.2, 0.28), archMat);
-      archBase2.position.set(1.0, 1.4, -3.3); scene.add(archBase2);
-      // Arch top (half-torus)
-      const archTop = new T.Mesh(new T.TorusGeometry(1.0, 0.14, 10, 24, Math.PI), archMat);
-      archTop.position.set(0, 3.0, -3.3); archTop.rotation.z = Math.PI; scene.add(archTop);
+      // Canvas stone tile texture for floor
+      function stoneTexture(size, tileSize, baseHex, darkHex) {
+        const cv = document.createElement("canvas"); cv.width = size; cv.height = size;
+        const x = cv.getContext("2d");
+        x.fillStyle = baseHex; x.fillRect(0, 0, size, size);
+        const rows = Math.ceil(size / tileSize);
+        for (let r = 0; r < rows; r++) {
+          const offset = (r % 2) * (tileSize * 0.52);
+          const cols = Math.ceil((size + tileSize) / tileSize);
+          for (let c = 0; c < cols; c++) {
+            const lum = 0.88 + Math.random() * 0.18;
+            const col = new T.Color(baseHex); col.offsetHSL(0, 0, -(1 - lum) * 0.12);
+            x.fillStyle = "#" + col.getHexString();
+            x.fillRect(c * tileSize + offset + 1, r * tileSize + 1, tileSize - 3, tileSize - 3);
+          }
+          x.strokeStyle = darkHex; x.lineWidth = 2;
+          x.beginPath(); x.moveTo(0, r * tileSize); x.lineTo(size, r * tileSize); x.stroke();
+        }
+        const tex = new T.CanvasTexture(cv); tex.wrapS = T.RepeatWrapping; tex.wrapT = T.RepeatWrapping; return tex;
+      }
 
-      // ---- Torch sconces (left and right of arch) ----
-      const torchMat = new T.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.88 });
-      const flameMat = new T.MeshStandardMaterial({ color: 0xff8a30, emissive: 0xff5010, emissiveIntensity: 1.4 });
-      [[-1.6, 2.1, -3.2], [1.6, 2.1, -3.2]].forEach(([tx, ty, tz]) => {
-        const stick = new T.Mesh(new T.CylinderGeometry(0.04, 0.04, 0.4, 8), torchMat);
-        stick.position.set(tx, ty, tz); scene.add(stick);
-        const flame = new T.Mesh(new T.SphereGeometry(0.1, 10, 8), flameMat);
-        flame.position.set(tx, ty + 0.25, tz); flame.scale.set(1, 1.3, 1); scene.add(flame);
-        const pl = new T.PointLight(0xff7020, 1.8, 6);
-        pl.position.set(tx, ty + 0.3, tz); scene.add(pl);
+      // ---- Raised platform ----
+      const floorTex = stoneTexture(512, 64, "#1d1624", "#0d0b12");
+      floorTex.repeat.set(3, 3);
+      const platMat = new T.MeshStandardMaterial({ map: floorTex, roughness: 0.92, metalness: 0.04 });
+      const plat = new T.Mesh(new T.CylinderGeometry(2.2, 2.4, 0.22, 48), platMat);
+      plat.position.y = -0.12; plat.receiveShadow = true; scene.add(plat);
+      // Rim glow
+      const rimGlow = new T.Mesh(new T.TorusGeometry(2.38, 0.026, 8, 72), new T.MeshStandardMaterial({ color: "#b07f30", emissive: "#b07f30", emissiveIntensity: 0.45, roughness: 0.3 }));
+      rimGlow.rotation.x = Math.PI / 2; rimGlow.position.y = -0.01; scene.add(rimGlow);
+      // Inner glyph ring
+      for (let i = 0; i < 2; i++) {
+        const r = [0.72, 1.28][i], col = ["#9170f0","#e8b54a"][i];
+        const ring = new T.Mesh(new T.TorusGeometry(r, 0.012, 6, 64), new T.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.55, roughness: 0.3 }));
+        ring.rotation.x = Math.PI / 2; ring.position.y = -0.01; scene.add(ring);
+      }
+      // Glyph radial lines (8 spokes)
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const spoke = new T.Mesh(new T.BoxGeometry(0.008, 0.006, 0.56), new T.MeshStandardMaterial({ color: "#e8b54a", emissive: "#e8b54a", emissiveIntensity: 0.35 }));
+        spoke.position.set(Math.cos(a) * 1.0, -0.01, Math.sin(a) * 1.0);
+        spoke.rotation.y = a; scene.add(spoke);
+      }
+      // Floor below platform
+      const groundTex = stoneTexture(512, 80, "#130f1a", "#090810");
+      groundTex.repeat.set(6, 6);
+      const ground = new T.Mesh(new T.PlaneGeometry(20, 20), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.97, metalness: 0 }));
+      ground.rotation.x = -Math.PI / 2; ground.position.y = -0.24; ground.receiveShadow = true; scene.add(ground);
+
+      // ---- Back wall with stone texture ----
+      const wallTex = stoneTexture(512, 52, "#1b1620", "#0d0b12");
+      wallTex.repeat.set(4, 4);
+      const wallMat = new T.MeshStandardMaterial({ map: wallTex, roughness: 0.94, metalness: 0 });
+      const backWall = new T.Mesh(new T.PlaneGeometry(9, 7), wallMat);
+      backWall.position.set(0, 3.2, -3.6); backWall.receiveShadow = true; scene.add(backWall);
+      // Side walls
+      const lWall = new T.Mesh(new T.PlaneGeometry(4, 7), wallMat);
+      lWall.position.set(-4, 3.2, -1.8); lWall.rotation.y = Math.PI / 2; scene.add(lWall);
+      const rWall = new T.Mesh(new T.PlaneGeometry(4, 7), wallMat);
+      rWall.position.set(4, 3.2, -1.8); rWall.rotation.y = -Math.PI / 2; scene.add(rWall);
+      // Ceiling
+      const ceil = new T.Mesh(new T.PlaneGeometry(9, 4), new T.MeshStandardMaterial({ color: 0x0d0a14, roughness: 1 }));
+      ceil.rotation.x = Math.PI / 2; ceil.position.y = 6.8; scene.add(ceil);
+
+      // ---- Arch pillars ----
+      const archMat = new T.MeshStandardMaterial({ color: 0x26203a, roughness: 0.86 });
+      const trimGold = new T.MeshStandardMaterial({ color: "#8a6020", emissive: "#5a3a10", emissiveIntensity: 0.2, roughness: 0.5 });
+      [-1.18, 1.18].forEach((sx) => {
+        // Main pillar body
+        const pillar = new T.Mesh(new T.CylinderGeometry(0.17, 0.19, 4.0, 14), archMat);
+        pillar.position.set(sx, 1.8, -3.5); scene.add(pillar);
+        // Capital (top block)
+        const cap = new T.Mesh(new T.BoxGeometry(0.46, 0.22, 0.46), new T.MeshStandardMaterial({ color: 0x1e1a2c, roughness: 0.85 }));
+        cap.position.set(sx, 3.9, -3.5); scene.add(cap);
+        // Base
+        const base = new T.Mesh(new T.BoxGeometry(0.44, 0.2, 0.44), new T.MeshStandardMaterial({ color: 0x1e1a2c, roughness: 0.85 }));
+        base.position.set(sx, -0.2, -3.5); scene.add(base);
+        // Gold trim ring on pillar
+        const pr = new T.Mesh(new T.TorusGeometry(0.175, 0.015, 6, 24), trimGold);
+        pr.rotation.x = Math.PI / 2; pr.position.set(sx, 3.7, -3.5); scene.add(pr);
+      });
+      // Arch lintel (top beam)
+      const lintel = new T.Mesh(new T.BoxGeometry(2.82, 0.28, 0.38), new T.MeshStandardMaterial({ color: 0x201c30, roughness: 0.88 }));
+      lintel.position.set(0, 4.02, -3.5); scene.add(lintel);
+      // Arch curved top (half-torus)
+      const archTop = new T.Mesh(new T.TorusGeometry(1.0, 0.18, 12, 28, Math.PI), archMat);
+      archTop.position.set(0, 3.1, -3.48); archTop.rotation.z = Math.PI; scene.add(archTop);
+
+      // ---- Wall torches ----
+      const torchWood = new T.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.88 });
+      const flameMat = new T.MeshStandardMaterial({ color: 0xff9030, emissive: 0xff5010, emissiveIntensity: 1.6, roughness: 0.4 });
+      [[-2.2, 2.6, -3.4], [2.2, 2.6, -3.4]].forEach(([tx, ty, tz]) => {
+        // Bracket
+        const bracket = new T.Mesh(new T.BoxGeometry(0.06, 0.06, 0.28), torchWood);
+        bracket.position.set(tx, ty, tz + 0.1); scene.add(bracket);
+        // Torch body
+        const torch = new T.Mesh(new T.CylinderGeometry(0.038, 0.045, 0.36, 8), torchWood);
+        torch.position.set(tx, ty + 0.02, tz + 0.06); torch.rotation.z = 0.18 * Math.sign(tx); scene.add(torch);
+        // Flame glow sphere
+        const flame = new T.Mesh(new T.SphereGeometry(0.1, 12, 10), flameMat);
+        flame.position.set(tx, ty + 0.22, tz + 0.06); flame.scale.set(0.9, 1.4, 0.9); scene.add(flame);
+        // Inner bright core
+        const core = new T.Mesh(new T.SphereGeometry(0.045, 8, 8), new T.MeshStandardMaterial({ color: "#fff8e0", emissive: "#fff8e0", emissiveIntensity: 2.0 }));
+        core.position.set(tx, ty + 0.22, tz + 0.06); scene.add(core);
+        const pl = new T.PointLight(0xff7020, 2.6, 7); pl.position.set(tx, ty + 0.3, tz + 0.1); scene.add(pl);
       });
 
-      // Subtle uplight from the floor ring
-      const upLight = new T.PointLight(0x9170f0, 0.4, 4); upLight.position.set(0, -0.05, 0); scene.add(upLight);
-      scene.userData.particles = []; // no particles
+      // ---- Side braziers on platform ----
+      const brazierMat = new T.MeshStandardMaterial({ color: "#4a3a20", roughness: 0.7, metalness: 0.5 });
+      [[-1.85, 0.14, 0.4], [1.85, 0.14, 0.4]].forEach(([bx, by, bz]) => {
+        const bowl = new T.Mesh(new T.CylinderGeometry(0.16, 0.09, 0.28, 14, 1, true), brazierMat);
+        bowl.position.set(bx, by, bz); scene.add(bowl);
+        const base = new T.Mesh(new T.CylinderGeometry(0.05, 0.08, 0.18, 8), brazierMat);
+        base.position.set(bx, by - 0.23, bz); scene.add(base);
+        const fire = new T.Mesh(new T.SphereGeometry(0.11, 10, 8), flameMat);
+        fire.position.set(bx, by + 0.18, bz); fire.scale.set(0.8, 1.2, 0.8); scene.add(fire);
+        const bpl = new T.PointLight(0xff6010, 1.4, 4); bpl.position.set(bx, by + 0.3, bz); scene.add(bpl);
+      });
+
+      // Uplight from glyph floor
+      const upLight = new T.PointLight(0x9170f0, 0.5, 5); upLight.position.set(0, -0.1, 0); scene.add(upLight);
     }
 
     const pivot = new T.Group(); scene.add(pivot);

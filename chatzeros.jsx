@@ -234,12 +234,59 @@
           }, (award ? award.emoji + " " : "") + "Award it!"))));
   }
 
+  // ---- Quote modal ----
+  function QuoteModal(props) {
+    var open = props.open, initial = props.initial, party = props.party, onClose = props.onClose, onSave = props.onSave;
+    var textState = useState(""); var quoteText = textState[0], setQuoteText = textState[1];
+    var speakerState = useState(""); var speaker = speakerState[0], setSpeaker = speakerState[1];
+    var sessionState = useState(""); var session = sessionState[0], setSession = sessionState[1];
+
+    useEffect(function() {
+      if (open) {
+        setQuoteText(initial ? initial.text : "");
+        setSpeaker(initial ? initial.speaker : (party && party[0] ? party[0].player : ""));
+        setSession(initial ? initial.session : "");
+      }
+    }, [open]);
+
+    var players = [];
+    if (party) { var seen = {}; party.forEach(function(p) { if (!seen[p.player]) { seen[p.player] = true; players.push(p.player); } }); }
+    players.push("Callum (DM)");
+
+    return React.createElement(Modal, { open: open, onClose: onClose, title: (initial && initial.id) ? "Edit Quote" : "Add a Quote", w: 480 },
+      React.createElement("div", { style: { padding: 20, display: "flex", flexDirection: "column", gap: 14 } },
+        React.createElement("div", { className: "field" },
+          React.createElement("label", null, "Quote"),
+          React.createElement("textarea", { className: "input", rows: 3, value: quoteText, onChange: function(e) { setQuoteText(e.target.value); },
+            placeholder: '"I check for traps." "There are no traps." "I check for traps again."', style: { resize: "vertical" } })),
+        React.createElement("div", { className: "field" },
+          React.createElement("label", null, "Who said it?"),
+          React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+            players.map(function(p) {
+              return React.createElement("button", { key: p, onClick: function() { setSpeaker(p); },
+                style: { padding: "6px 12px", borderRadius: 100, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  border: "1px solid " + (speaker === p ? CZ_POP : "var(--hair)"),
+                  background: speaker === p ? "rgba(255,78,205,0.15)" : "var(--surface-2)",
+                  color: speaker === p ? CZ_POP : "var(--ink-soft)" } }, p);
+            }))),
+        React.createElement("div", { className: "field" },
+          React.createElement("label", null, "Session / context (optional)"),
+          React.createElement("input", { className: "input", value: session, onChange: function(e) { setSession(e.target.value); }, placeholder: "e.g. Session 12, or 'The bar fight'" })),
+        React.createElement("div", { className: "row", style: { justifyContent: "flex-end", gap: 10 } },
+          React.createElement("button", { className: "btn ghost", onClick: onClose }, "Cancel"),
+          React.createElement("button", { className: "btn primary", disabled: !quoteText.trim(),
+            onClick: function() { onSave(Object.assign({}, initial, { text: quoteText, speaker: speaker, session: session })); }
+          }, "💬 Save quote"))));
+  }
+
   // ---- Main component ----
   function ChatZeroes(props) {
     var chatStats = props.chatStats;
     var setChatStats = props.setChatStats;
     var awards = props.awards;
     var setAwards = props.setAwards;
+    var quotes = props.quotes || [];
+    var setQuotes = props.setQuotes;
     var party = props.party;
 
     var ctx = useContext(window.NZAuth.RoleContext);
@@ -253,6 +300,19 @@
 
     var winnerEditState = useState(null);
     var winnerEdit = winnerEditState[0], setWinnerEdit = winnerEditState[1];
+
+    var quoteEditState = useState(null);
+    var quoteEdit = quoteEditState[0], setQuoteEdit = quoteEditState[1];
+
+    function saveQuote(q) {
+      if (q.id) {
+        setQuotes(function(qs) { return qs.map(function(x) { return x.id === q.id ? q : x; }); });
+      } else {
+        setQuotes(function(qs) { return [Object.assign({}, q, { id: "q" + Date.now() })].concat(qs); });
+      }
+      setQuoteEdit(null);
+    }
+    function deleteQuote(id) { setQuotes(function(qs) { return qs.filter(function(q) { return q.id !== id; }); }); }
 
     function saveStat(s) {
       if (s.id) {
@@ -338,6 +398,36 @@
                 onRemoveWinner: function(idx) { removeWinner(a.id, idx); } });
             }))),
 
+        // ===== Quote Wall =====
+        React.createElement("div", { style: { marginTop: 40 } },
+          React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20 } },
+            React.createElement("div", { style: { fontFamily: "var(--display)", fontSize: 13, letterSpacing: "0.2em", color: CZ_GOLD, textTransform: "uppercase" } }, "💬 Quote Wall"),
+            React.createElement("div", { style: { flex: 1, height: 1, background: CZ_GOLD + "33" } }),
+            React.createElement("button", { onClick: function() { setQuoteEdit(false); }, style: czBtn(CZ_GOLD) },
+              React.createElement(Icon, { name: "plus", size: 14 }), " Add quote")),
+          quotes.length === 0
+            ? React.createElement("div", { style: { textAlign: "center", padding: "40px 20px", color: CZ_MUTED, fontStyle: "italic", fontSize: 14 } },
+                "No quotes yet. Add the first one — somebody definitely said something ridiculous this session.")
+            : React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 } },
+                quotes.map(function(q) {
+                  return React.createElement("div", { key: q.id,
+                    style: { background: CZ_SURFACE, borderRadius: 14, padding: 20,
+                      border: "1px solid " + CZ_GOLD + "22",
+                      borderLeft: "4px solid " + CZ_GOLD + "88",
+                      position: "relative" }
+                  },
+                    isDM && React.createElement("div", { style: { position: "absolute", top: 10, right: 10, display: "flex", gap: 4 } },
+                      React.createElement("button", { onClick: function() { setQuoteEdit(q); },
+                        style: { background: "none", border: "none", color: CZ_MUTED, cursor: "pointer", fontSize: 14 } }, "✏️"),
+                      React.createElement("button", { onClick: function() { deleteQuote(q.id); },
+                        style: { background: "none", border: "none", color: "#ff6060", cursor: "pointer", fontSize: 14 } }, "🗑️")),
+                    React.createElement("div", { style: { fontSize: 28, color: CZ_GOLD + "55", marginBottom: 6, fontFamily: "Georgia, serif", lineHeight: 1 } }, "“"),
+                    React.createElement("div", { style: { fontSize: 14.5, color: CZ_INK, lineHeight: 1.55, fontStyle: "italic", marginBottom: 12 } }, q.text),
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                      React.createElement("span", { style: { color: CZ_POP, fontWeight: 700, fontSize: 13 } }, "— " + (q.speaker || "Unknown")),
+                      q.session && React.createElement("span", { style: { color: CZ_MUTED, fontSize: 12 } }, q.session)));
+                }))),
+
         React.createElement(StatModal, {
           open: statEdit !== null, initial: statEdit || null,
           onClose: function() { setStatEdit(null); }, onSave: saveStat }),
@@ -346,7 +436,10 @@
           onClose: function() { setAwardEdit(null); }, onSave: saveAward }),
         React.createElement(WinnerModal, {
           open: !!winnerEdit, award: winnerEdit, party: party,
-          onClose: function() { setWinnerEdit(null); }, onSave: addWinner })
+          onClose: function() { setWinnerEdit(null); }, onSave: addWinner }),
+        React.createElement(QuoteModal, {
+          open: quoteEdit !== null, initial: quoteEdit || null, party: party,
+          onClose: function() { setQuoteEdit(null); }, onSave: saveQuote })
       )
     );
   }

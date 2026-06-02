@@ -9,8 +9,24 @@
     primary: "primary", secondary: "secondary", trim: "trim", capeColor: "secondary",
   };
 
+  function lsGet(key, fb) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fb; } catch(e) { return fb; } }
+  function lsSave(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+
   function Creator({ party, onSave }) {
-    const [roster, setRoster] = useState(() => party.map((p) => ({ id: p.id, name: p.name, ring: p.ring, avatar: Object.assign({}, A.DEFAULT, p.avatar) })));
+    const [roster, setRoster] = useState(() => {
+      const base = party.map((p) => ({ id: p.id, name: p.name, ring: p.ring, avatar: Object.assign({}, A.DEFAULT, p.avatar) }));
+      const saved = lsGet("nz_avatars", {});
+      // Restore NZAVATARS global on load
+      window.NZAVATARS = window.NZAVATARS || {};
+      base.forEach((r) => {
+        if (saved[r.id]) {
+          r.avatar = saved[r.id].avatar || r.avatar;
+          r.name = saved[r.id].name || r.name;
+          window.NZAVATARS[r.id] = r.avatar;
+        }
+      });
+      return base;
+    });
     const [activeId, setActiveId] = useState(party[0].id);
     const active = roster.find((r) => r.id === activeId);
     const [cfg, setCfg] = useState(active.avatar);
@@ -33,8 +49,14 @@
     function set(k, v) { setCfg((c) => ({ ...c, [k]: v })); setSaved(false); }
     function randomize() { setCfg(A.randomConfig()); setSaved(false); }
     function save() {
-      setRoster((rs) => rs.map((r) => r.id === activeId ? { ...r, name, avatar: cfg } : r));
-      window.NZAVATARS = window.NZAVATARS || {}; window.NZAVATARS[activeId] = cfg;
+      const updated = roster.map((r) => r.id === activeId ? { ...r, name, avatar: cfg } : r);
+      setRoster(updated);
+      window.NZAVATARS = window.NZAVATARS || {};
+      window.NZAVATARS[activeId] = cfg;
+      // Persist all avatar configs to localStorage
+      const toStore = {};
+      updated.forEach((r) => { toStore[r.id] = { name: r.name, avatar: r.avatar }; });
+      lsSave("nz_avatars", toStore);
       setSaved(true); onSave && onSave({ id: activeId, name, avatar: cfg });
       setTimeout(() => setSaved(false), 2200);
     }

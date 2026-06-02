@@ -1,6 +1,9 @@
 /* APP SHELL — nav, routing, roles, account switching */
 (function () {
   const { useState, useContext, useEffect } = React;
+
+  function lsGet(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
+  function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
   const Icon = window.Icon;
   const { Avatar } = window.NZUI;
   const D = window.NZ;
@@ -26,12 +29,19 @@
     const [collapsed, setCollapsed] = useState(false);
     const [switchOpen, setSwitchOpen] = useState(false);
     const [pendingMap, setPendingMap] = useState(null);
-    const [recaps, setRecaps] = useState(D.recaps);
-    const [campaign, setCampaign] = useState(D.campaign);
-    const [chatStats, setChatStats] = useState(D.chatStats);
-    const [awards, setAwards] = useState(D.awards);
+    const [recaps, setRecaps]       = useState(() => lsGet("nz_recaps",    D.recaps));
+    const [campaign, setCampaign]   = useState(() => lsGet("nz_campaign",  D.campaign));
+    const [chatStats, setChatStats] = useState(() => lsGet("nz_chatstats", D.chatStats));
+    const [awards, setAwards]       = useState(() => lsGet("nz_awards",    D.awards));
+    const [quotes, setQuotes]       = useState(() => lsGet("nz_quotes",    []));
     const [worldBgImg, setWorldBgImg] = useState(() => { try { return localStorage.getItem("nz_worldbg") || null; } catch(e) { return null; } });
     function saveWorldBg(img) { setWorldBgImg(img); try { if (img) localStorage.setItem("nz_worldbg", img); else localStorage.removeItem("nz_worldbg"); } catch(e) {} }
+
+    useEffect(() => { lsSet("nz_recaps",    recaps);    }, [recaps]);
+    useEffect(() => { lsSet("nz_campaign",  campaign);  }, [campaign]);
+    useEffect(() => { lsSet("nz_chatstats", chatStats); }, [chatStats]);
+    useEffect(() => { lsSet("nz_awards",    awards);    }, [awards]);
+    useEffect(() => { lsSet("nz_quotes",    quotes);    }, [quotes]);
 
     const role = user ? user.role : null;
     const allowed = role ? Auth.VIEW_ACCESS[role] : [];
@@ -91,7 +101,7 @@
             view === "creator" && React.createElement(window.Creator, { party: D.party }),
             view === "scheduler" && React.createElement(window.Scheduler, { members: D.members, pollOptions: D.pollOptions, sessions: D.sessions, weeklySchedule: D.weeklySchedule }),
             view === "recaps" && React.createElement(Recaps, { recaps, setRecaps, stats: D.stats }),
-            view === "chatzeros" && React.createElement(window.ChatZeroes, { chatStats, setChatStats, awards, setAwards, party: D.party }),
+            view === "chatzeros" && React.createElement(window.ChatZeroes, { chatStats, setChatStats, awards, setAwards, quotes, setQuotes, party: D.party }),
             view === "extras" && React.createElement(Extras, { recaps, stats: D.stats, go }),
             view === "accounts" && React.createElement(Auth.AccountsView))),
 
