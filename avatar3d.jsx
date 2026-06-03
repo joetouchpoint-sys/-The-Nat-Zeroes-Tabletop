@@ -56,6 +56,16 @@
     { id: "hair", label: "Hair", controls: [["hair", "Hairstyle", "chips"], ["hairColor", "Hair colour", "color"]] },
     { id: "outfit", label: "Outfit", controls: [["outfit", "Outfit", "chips"], ["primary", "Primary", "color"], ["secondary", "Secondary", "color"], ["trim", "Trim", "color"], ["shoulders", "Shoulder pads", "toggle"], ["gloves", "Gloves", "toggle"]] },
     { id: "extras", label: "Cloak & Gear", controls: [["cape", "Cape / cloak", "chips"], ["capeColor", "Cloak colour", "color"], ["headgear", "Headgear", "chips"], ["weapon", "Main hand", "chips"], ["offhand", "Off hand", "chips"]] },
+    { id: "pose", label: "Pose", controls: [
+      ["poseArmLRaise", "Left arm raise", "poseslider"],
+      ["poseArmRRaise", "Right arm raise", "poseslider"],
+      ["poseArmLOut", "Left arm out", "poseslider"],
+      ["poseArmROut", "Right arm out", "poseslider"],
+      ["poseHeadTilt", "Head tilt", "poseslider"],
+      ["poseBodyLean", "Body lean", "poseslider"],
+      ["poseWeaponX", "Weapon forward/back", "poseslider"],
+      ["poseWeaponRot", "Weapon angle", "poseslider"],
+    ]},
   ];
 
   const DEFAULT = {
@@ -65,6 +75,9 @@
     outfit: "leather", primary: "#3c5a36", secondary: "#243a20", trim: "#caa46a",
     shoulders: true, gloves: true, cape: "none", capeColor: "#5e2342",
     headgear: "none", weapon: "sword", offhand: "none",
+    // Pose overrides (0 = default position)
+    poseArmLRaise: 0, poseArmRRaise: 0, poseArmLOut: 0, poseArmROut: 0,
+    poseHeadTilt: 0, poseBodyLean: 0, poseWeaponX: 0, poseWeaponRot: 0,
   };
 
   // ---------------- materials ----------------
@@ -145,8 +158,11 @@
       add(sphere(0.115 * bw, armMat), s * shoulderX, 1.46, 0.02);
       if (c.shoulders) { const pad = add(sphere(0.15 * bw, c.outfit === "plate" ? trimMat : secMat), s * shoulderX, 1.5, 0); pad.scale.set(1.1, 0.8, 1.1); }
       // Upper arm: slight outward + forward tilt (natural relaxed pose)
+      const armRaise = s < 0 ? (c.poseArmLRaise || 0) : (c.poseArmRRaise || 0);
+      const armOut   = s < 0 ? (c.poseArmLOut  || 0) : (c.poseArmROut  || 0);
       const upper = add(limb(0.082 * bw, 0.34, armMat), s * (shoulderX + 0.04), 1.27, 0.02);
-      upper.rotation.z = s * 0.12; upper.rotation.x = 0.08;
+      upper.rotation.z = s * (0.12 + armOut * 0.6);
+      upper.rotation.x = 0.08 + armRaise * 0.8;
       upper.name = s < 0 ? "armL" : "armR"; // tag for breathing animation
       // Forearm: angled more forward — brings hand in front of torso
       const fore = add(limb(0.072 * bw, 0.32, c.gloves ? secMat : skinMat.clone()), s * (shoulderX + 0.08), 0.93, 0.08);
@@ -211,6 +227,9 @@
     }
 
     g.scale.setScalar(raceScale * (c.height || 1));
+    // Apply pose overrides
+    if (c.poseHeadTilt) g.traverse((m) => { if (m.name === "head") m.rotation.z = (c.poseHeadTilt || 0) * 0.4; });
+    if (c.poseBodyLean) g.rotation.x = (c.poseBodyLean || 0) * 0.3;
     g.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     return g;
   }
@@ -357,7 +376,8 @@
       case "spear": grp.add(meshAt(capsuleGeo(0.024, 1.5), wood, 0, 0.4, 0)); grp.add(meshAt(new T.ConeGeometry(0.06, 0.26, 10), steel, 0, 1.2, 0)); break;
     }
     grp.traverse((m) => { if (m.isMesh) m.castShadow = true; });
-    grp.rotation.x = -0.05; // minimal backward tilt — hand is already forward
+    grp.rotation.x = -0.05 + (c.poseWeaponRot || 0) * 0.5;
+    grp.position.z += (c.poseWeaponX || 0) * 0.15;
     g.add(grp);
   }
   function buildOffhand(g, off, hand, c) {

@@ -16,6 +16,10 @@
     const [sess, setSess] = useState(sessions);
     const [proposeOpen, setProposeOpen] = useState(false);
     const [wsch, setWsch] = useState(weeklySchedule || { primaryDay: 2, backupDay: 3, primaryTime: "7:00 PM", backupTime: "7:00 PM", active: false, activationNote: "" });
+    const [discordLink, setDiscordLink] = useState(() => { try { return localStorage.getItem("nz_discordlink") || ""; } catch(e) { return ""; } });
+    const [editingDiscord, setEditingDiscord] = useState(false);
+    const [discordVal, setDiscordVal] = useState(discordLink);
+    function saveDiscord() { setDiscordLink(discordVal); try { localStorage.setItem("nz_discordlink", discordVal); } catch(e) {} setEditingDiscord(false); }
 
     // your vote per option: derive from data (use ME dynamically)
     function myVote(o) {
@@ -40,6 +44,21 @@
     const nextConfirmed = sess.find((s) => s.confirmed) || sess[0];
 
     return React.createElement("div", { className: "view-pad", style: { maxWidth: 1100 } },
+      // Discord link bar
+      React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: 14, background: "var(--surface)", border: "1px solid var(--hair)", borderRadius: 12 } },
+        React.createElement("span", { style: { fontSize: 20 } }, "🎮"),
+        React.createElement("span", { style: { fontFamily: "var(--display)", fontWeight: 600, fontSize: 13, color: "var(--amethyst)", letterSpacing: "0.06em" } }, "GROUP DISCORD"),
+        React.createElement("div", { className: "spacer" }),
+        editingDiscord
+          ? React.createElement(React.Fragment, null,
+              React.createElement("input", { className: "input", value: discordVal, onChange: (e) => setDiscordVal(e.target.value), placeholder: "Paste Discord invite link…", style: { width: 280 }, autoFocus: true, onKeyDown: (e) => e.key === "Enter" && saveDiscord() }),
+              React.createElement("button", { className: "btn primary sm", onClick: saveDiscord }, "Save"),
+              React.createElement("button", { className: "btn ghost sm", onClick: () => setEditingDiscord(false) }, "Cancel"))
+          : React.createElement(React.Fragment, null,
+              discordLink
+                ? React.createElement("a", { href: discordLink, target: "_blank", rel: "noopener", className: "btn primary", style: { textDecoration: "none" } }, React.createElement(Icon, { name: "party", size: 16 }), "Open Discord")
+                : React.createElement("span", { className: "muted", style: { fontSize: 13 } }, "No Discord link set"),
+              canEdit && React.createElement("button", { className: "btn sm ghost", onClick: () => { setDiscordVal(discordLink); setEditingDiscord(true); } }, React.createElement(Icon, { name: "settings", size: 13 }), "Edit"))),
       // weekly schedule
       React.createElement(WeeklySchedulePanel, { wsch, setWsch, canEdit, members }),
       // countdown + propose

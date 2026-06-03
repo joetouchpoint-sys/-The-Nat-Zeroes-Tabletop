@@ -9,22 +9,34 @@
   }
   function hashHue(str) { let h = 0; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
 
-  // Gradient portrait disc with initials
+  // Profile photos stored in localStorage
+  function getProfilePhoto(name) {
+    try { const p = JSON.parse(localStorage.getItem("nz_profilephotos") || "{}"); return p[name] || null; } catch(e) { return null; }
+  }
+  function setProfilePhoto(name, dataUrl) {
+    try { const p = JSON.parse(localStorage.getItem("nz_profilephotos") || "{}"); p[name] = dataUrl; localStorage.setItem("nz_profilephotos", JSON.stringify(p)); } catch(e) {}
+  }
+
+  // Gradient portrait disc — shows profile photo if one is stored
   function Avatar({ name, ring, size = 40, glow = false }) {
+    const photo = getProfilePhoto(name);
     const hue = hashHue(name);
     const bg = `radial-gradient(circle at 32% 28%, hsl(${hue} 42% 34%), hsl(${(hue + 40) % 360} 45% 18%))`;
     return React.createElement("div", {
       style: {
         width: size, height: size, borderRadius: "50%", flex: "none",
-        background: bg,
+        background: photo ? "transparent" : bg,
         border: `2px solid ${ring || "var(--gold-deep)"}`,
         boxShadow: glow ? `0 0 14px ${ring}66` : "var(--shadow-1)",
         display: "grid", placeItems: "center",
         fontFamily: "var(--display)", fontWeight: 700,
         fontSize: size * 0.36, color: "rgba(255,255,255,0.92)",
         letterSpacing: "0.02em", textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+        overflow: "hidden",
       },
-    }, initials(name));
+    }, photo
+      ? React.createElement("img", { src: photo, style: { width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" } })
+      : initials(name));
   }
 
   // HP bar

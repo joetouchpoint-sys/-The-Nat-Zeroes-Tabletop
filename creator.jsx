@@ -122,6 +122,7 @@
     if (type === "color") return colors(key, label, A.OPTIONS[COLORLIST[key]], cfg[key], (v) => set(key, v));
     if (type === "slider") return slider(key, label, cfg[key], 0.82, 1.18, (v) => set(key, v));
     if (type === "toggle") return toggle(key, label, cfg[key], (v) => set(key, v));
+    if (type === "poseslider") return slider(key, label, cfg[key] || 0, -1, 1, (v) => set(key, v));
     return null;
   }
 

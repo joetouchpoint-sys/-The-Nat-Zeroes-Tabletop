@@ -477,7 +477,7 @@
                   React.createElement("button", { onClick: () => { if (window.NZFirebase) window.NZFirebase.leaveRoom(); setRoomCode(null); setPresence({}); }, style: { background: "none", border: "none", color: "var(--ink-dim)", cursor: "pointer", fontSize: 14, padding: 0, marginLeft: 2 } }, "✕"))
               : React.createElement("button", { className: "btn sm ghost", onClick: () => setRoomOpen((x) => !x) },
                   React.createElement(Icon, { name: "party", size: 15 }), canEdit ? "Create session" : "Join session"),
-            roomOpen && !roomCode && React.createElement("div", { style: { position: "absolute", top: 42, right: 0, zIndex: 50, background: "var(--surface)", border: "1px solid var(--hair)", borderRadius: 12, padding: 16, boxShadow: "var(--shadow-2)", minWidth: 280, display: "flex", flexDirection: "column", gap: 10 } },
+            roomOpen && !roomCode && React.createElement("div", { style: { position: "fixed", top: 120, right: 20, zIndex: 9999, background: "var(--surface)", border: "1px solid var(--hair)", borderRadius: 12, padding: 16, boxShadow: "var(--shadow-3)", minWidth: 300, display: "flex", flexDirection: "column", gap: 10 } },
               React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 600, fontSize: 13, color: "var(--gold)" } }, canEdit ? "Create a Session" : "Join a Session"),
               React.createElement("div", { className: "muted", style: { fontSize: 12 } }, canEdit ? "Generate a code, share it with your players." : "Enter the code Callum shared with you."),
               // DM: generate code section

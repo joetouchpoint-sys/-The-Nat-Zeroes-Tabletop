@@ -124,8 +124,11 @@
       if (!drawingPath || !pathingFrom || !canEdit) return;
       if (e.target.closest("button") || e.target.closest(".path-ctrl")) return;
       const rect = mapContainerRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width / zoom) * 100;
-      const y = ((e.clientY - rect.top) / rect.height / zoom) * 100;
+      // Account for zoom centered on middle of container
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const x = 50 + (e.clientX - cx) / (rect.width * zoom) * 100;
+      const y = 50 + (e.clientY - cy) / (rect.height * zoom) * 100;
       setPathWaypoints((ws) => [...ws, { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) }]);
     }
 
@@ -183,18 +186,20 @@
           React.createElement(WorldCanvas, { bgImg, is3d }),
           // Ambient cloud layer
           React.createElement(CloudLayer, null),
-          // Routes (auto + custom)
-          React.createElement("svg", { style: { position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 2 } },
+          // Routes (auto + custom) — viewBox="0 0 100 100" so coords are pure 0-100 (no % needed)
+          React.createElement("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none",
+            style: { position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2, overflow: "visible" } },
             // Auto routes between consecutive discovered locs
-            routePairs(discovered).map(([a, b], i) => React.createElement("line", { key: "auto" + i, x1: a.x + "%", y1: a.y + "%", x2: b.x + "%", y2: b.y + "%",
-              stroke: "rgba(232,181,74,0.28)", strokeWidth: 1.5, strokeDasharray: "5 7" })),
+            routePairs(discovered).map(([a, b], i) => React.createElement("line", { key: "auto" + i,
+              x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+              stroke: "rgba(232,181,74,0.35)", strokeWidth: 0.4, strokeDasharray: "1.5 1.8", vectorEffect: "non-scaling-stroke" })),
             // In-progress path preview while drawing
             pathingFrom && pathWaypoints.length > 0 && (function() {
               const fromLoc = locs.find((l) => l.id === pathingFrom);
               if (!fromLoc) return null;
               const pts = [[fromLoc.x, fromLoc.y], ...pathWaypoints.map((w) => [w.x, w.y])];
-              return React.createElement("polyline", { points: pts.map(([x, y]) => x + "% " + y + "%").join(", "),
-                fill: "none", stroke: pathColor, strokeWidth: 2, strokeDasharray: "6 4", opacity: 0.6 });
+              return React.createElement("polyline", { points: pts.map(([x, y]) => x + " " + y).join(" "),
+                fill: "none", stroke: pathColor, strokeWidth: 0.5, strokeDasharray: "1.5 1", opacity: 0.7, vectorEffect: "non-scaling-stroke" });
             })(),
             // Custom paths — rendered as polylines through waypoints
             paths.map((p) => {
@@ -207,22 +212,20 @@
               const [mx, my] = allPts[midIdx];
               const col = p.color || "#e8b54a";
               return React.createElement(React.Fragment, { key: p.id },
-                React.createElement("polyline", { points: allPts.map(([x, y]) => x + "% " + y + "%").join(", "),
-                  fill: "none", stroke: col, strokeWidth: 2.5, strokeDasharray: "8 5",
-                  style: { filter: "drop-shadow(0 0 3px " + col + "88)", pointerEvents: "none" } }),
+                React.createElement("polyline", { points: allPts.map(([x, y]) => x + " " + y).join(" "),
+                  fill: "none", stroke: col, strokeWidth: 0.6, strokeDasharray: "2 1.2", vectorEffect: "non-scaling-stroke" }),
                 // Delete button at midpoint
-                canEdit && React.createElement("circle", { cx: mx + "%", cy: my + "%", r: 7,
-                  fill: "rgba(24,18,34,0.92)", stroke: col, strokeWidth: 1.5, style: { cursor: "pointer", pointerEvents: "all" },
+                canEdit && React.createElement("circle", { cx: mx, cy: my, r: 2,
+                  fill: "rgba(24,18,34,0.92)", stroke: col, strokeWidth: 0.4, style: { cursor: "pointer" },
                   onClick: (e) => { e.stopPropagation(); deletePath(p.id); } }),
-                canEdit && React.createElement("text", { x: mx + "%", y: my + "%",
-                  textAnchor: "middle", dominantBaseline: "middle", fontSize: 10, fill: "#fff",
-                  style: { cursor: "pointer", userSelect: "none", pointerEvents: "all" },
+                canEdit && React.createElement("text", { x: mx, y: my + 0.4,
+                  textAnchor: "middle", dominantBaseline: "middle", fontSize: 2.4, fill: "#fff",
+                  style: { cursor: "pointer", userSelect: "none" },
                   onClick: (e) => { e.stopPropagation(); deletePath(p.id); } }, "×"),
                 // Draggable waypoint dots
-                canEdit && wps.map((wp, i) => React.createElement("circle", { key: i, cx: wp.x + "%", cy: wp.y + "%", r: 5,
-                  fill: col, stroke: "#fff", strokeWidth: 1.5,
-                  style: { cursor: "grab", pointerEvents: "all" },
-                  className: "path-ctrl",
+                canEdit && wps.map((wp, i) => React.createElement("circle", { key: i, cx: wp.x, cy: wp.y, r: 1.4,
+                  fill: col, stroke: "#fff", strokeWidth: 0.4,
+                  style: { cursor: "grab" },
                   onPointerDown: (e) => onWaypointPointerDown(e, p.id, i) })));
             }).filter(Boolean)),
           // Parchment border overlay

@@ -123,8 +123,27 @@
   function AccountsView() {
     const ctx = useContext(RoleContext);
     const [accts, setAccts] = useState(ACCOUNTS);
+    const [photoTick, setPhotoTick] = useState(0); // force re-render after photo upload
     const manage = can(ctx.role, "manageAccounts");
+    // Any user can upload their own photo; DM can upload all
+    const canUploadPhoto = (acctName) => manage || (ctx.user && ctx.user.name === acctName);
     function setRole(id, role) { if (manage) setAccts((a) => a.map((x) => x.id === id ? { ...x, role } : x)); }
+    function uploadPhoto(name, e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        // Compress to max 200px
+        const img = new Image(); img.onload = function() {
+          const s = Math.min(1, 200 / Math.max(img.width, img.height));
+          const cv = document.createElement("canvas"); cv.width = Math.round(img.width*s); cv.height = Math.round(img.height*s);
+          cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+          window.NZUI && window.NZUI._setProfilePhoto ? window.NZUI._setProfilePhoto(name, cv.toDataURL("image/jpeg", 0.85)) : (function(){
+            try { const p = JSON.parse(localStorage.getItem("nz_profilephotos")||"{}"); p[name]=cv.toDataURL("image/jpeg",0.85); localStorage.setItem("nz_profilephotos",JSON.stringify(p)); } catch(e2) {}
+          })();
+          setPhotoTick((x) => x + 1); // trigger re-render
+        }; img.src = ev.target.result;
+      }; reader.readAsDataURL(file);
+    }
     return React.createElement("div", { className: "view-pad", style: { maxWidth: 920 } },
       React.createElement("p", { className: "muted", style: { marginTop: 0, marginBottom: 18, maxWidth: 600 } },
         manage ? "Manage who can do what. As DM you have super-admin control over every account and role."
@@ -138,8 +157,15 @@
       React.createElement("div", { className: "panel", style: { overflow: "hidden" } },
         accts.map((a, i) => {
           const r = ROLES[a.role];
+          const fileInputId = "photo-" + a.id;
           return React.createElement("div", { key: a.id, style: { display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: i ? "1px solid var(--hair)" : "none" } },
-            React.createElement(Avatar, { name: a.name, ring: a.ring, size: 42 }),
+            // Avatar with photo upload on hover (for own account or DM)
+            React.createElement("div", { style: { position: "relative", cursor: canUploadPhoto(a.name) ? "pointer" : "default" },
+              title: canUploadPhoto(a.name) ? "Click to upload photo" : undefined,
+              onClick: canUploadPhoto(a.name) ? () => document.getElementById(fileInputId).click() : undefined },
+              React.createElement(Avatar, { name: a.name, ring: a.ring, size: 46 }),
+              canUploadPhoto(a.name) && React.createElement("div", { style: { position: "absolute", bottom: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "var(--gold)", display: "grid", placeItems: "center", fontSize: 10, color: "#000", border: "1px solid var(--bg)" } }, "\ud83d\udcf7"),
+              canUploadPhoto(a.name) && React.createElement("input", { id: fileInputId, type: "file", accept: "image/*", hidden: true, onChange: (e) => uploadPhoto(a.name, e) })),
             React.createElement("div", { className: "col", style: { flex: 1, minWidth: 0 } },
               React.createElement("span", { style: { fontWeight: 600, fontSize: 15 } }, a.name),
               React.createElement("span", { className: "muted", style: { fontSize: 12.5 } }, a.handle + "  \u00b7  " + a.char)),
