@@ -106,15 +106,9 @@
     const allowed = role ? Auth.VIEW_ACCESS[role] : [];
     useEffect(() => { if (role && !allowed.includes(view)) setView("home"); }, [role]);
 
-    if (!user) return React.createElement(Auth.LoginScreen, { onLogin: setUser });
-
-    const navItems = NAV.filter((n) => allowed.includes(n.id));
-
-    const go = (v) => { if (allowed.includes(v)) setView(v); };
-    const openMap = (mapId) => { setPendingMap(mapId); setView("map"); };
-
-    // Global keyboard shortcuts
+    // Global keyboard shortcuts — must be before early return to obey Rules of Hooks
     useEffect(() => {
+      if (!user) return; // no shortcuts when logged out
       function onKey(e) {
         const tag = (e.target || {}).tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -126,7 +120,14 @@
       }
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
-    }, [view]);
+    }, [user, view]);
+
+    if (!user) return React.createElement(Auth.LoginScreen, { onLogin: setUser });
+
+    const navItems = NAV.filter((n) => allowed.includes(n.id));
+
+    const go = (v) => { if (allowed.includes(v)) setView(v); };
+    const openMap = (mapId) => { setPendingMap(mapId); setView("map"); };
     const meta = NAV.find((n) => n.id === view) || NAV[0];
     const roleInfo = Auth.ROLES[role];
     const ctxVal = { user, role, can: (c) => Auth.can(role, c) };
