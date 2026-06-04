@@ -88,7 +88,44 @@
     const [riversideLink, setRiversideLink]   = useState(() => lsGet("nz_riverside", ""));
     const [worldMapName, setWorldMapName]     = useState(() => lsGet("nz_worldname", "Aldermoor"));
     const [soundsOn, setSoundsOn]           = useState(true);
+    const [parchment, setParchment]         = useState(() => { try { return localStorage.getItem("nz_parchment") === "1"; } catch(e) { return false; } });
+    const [showShortcuts, setShowShortcuts] = useState(false);
+    const [isFullscreen, setIsFullscreen]   = useState(false);
+    const [online, setOnline]               = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
     const isFbIncoming = useRef(false);
+
+    // Online/offline watcher
+    useEffect(() => {
+      const onOnline  = () => setOnline(true);
+      const onOffline = () => setOnline(false);
+      window.addEventListener("online",  onOnline);
+      window.addEventListener("offline", onOffline);
+      return () => { window.removeEventListener("online",  onOnline); window.removeEventListener("offline", onOffline); };
+    }, []);
+
+    // Fullscreen change tracker
+    useEffect(() => {
+      const h = () => setIsFullscreen(!!document.fullscreenElement);
+      document.addEventListener("fullscreenchange", h);
+      return () => document.removeEventListener("fullscreenchange", h);
+    }, []);
+
+    // Parchment theme: toggle CSS class on html element
+    useEffect(() => {
+      document.documentElement.classList.toggle("parchment-theme", parchment);
+      try { localStorage.setItem("nz_parchment", parchment ? "1" : "0"); } catch(e) {}
+    }, [parchment]);
+
+    // Global keyboard shortcut: ? = open shortcut cheat-sheet
+    useEffect(() => {
+      function onKey(e) {
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
+        if (e.key === "?") setShowShortcuts((x) => !x);
+        if (e.key === "Escape") setShowShortcuts(false);
+      }
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, []);
     const [worldBgImg, setWorldBgImg] = useState(null);
     useEffect(() => { dbLoad("nz_worldbg", (img) => { if (img) setWorldBgImg(img); }); }, []);
     function saveWorldBg(img) { setWorldBgImg(img); dbSave("nz_worldbg", img || null); }
@@ -212,11 +249,25 @@
             React.createElement("button", { className: "acct-pill", onClick: () => setSwitchOpen(true), title: "Switch account" },
               React.createElement(Avatar, { name: user.name, ring: user.ring, size: 28 }),
               React.createElement("span", { className: "tag", style: { fontSize: 10, color: roleInfo.color, borderColor: roleInfo.color + "55", background: roleInfo.color + "1a" } }, roleInfo.short)),
+            // Offline indicator
+            !online && React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", background: "rgba(232,65,46,0.15)", border: "1px solid rgba(232,65,46,0.35)", borderRadius: 8, fontSize: 12, color: "var(--red-bright)" } },
+              React.createElement("span", null, "●"), "Offline"),
             // Sounds toggle
             React.createElement("button", { className: "icon-btn", title: soundsOn ? "Mute UI sounds" : "Enable UI sounds",
               onClick: () => { const on = window.NZSounds ? window.NZSounds.toggle() : false; setSoundsOn(on !== undefined ? on : !soundsOn); } },
               React.createElement("span", { style: { fontSize: 16 } }, soundsOn ? "🔊" : "🔇")),
-            React.createElement("button", { className: "icon-btn", title: "Notifications" }, React.createElement(Icon, { name: "bell", size: 18 }))),
+            // Parchment light theme toggle
+            React.createElement("button", { className: "icon-btn", title: parchment ? "Switch to dark theme" : "Switch to parchment light theme",
+              onClick: () => setParchment((x) => !x) },
+              React.createElement("span", { style: { fontSize: 16 } }, parchment ? "🌙" : "📜")),
+            // Fullscreen toggle
+            React.createElement("button", { className: "icon-btn", title: isFullscreen ? "Exit fullscreen" : "Go fullscreen (great for TV/projector)",
+              onClick: () => { isFullscreen ? document.exitFullscreen() : document.documentElement.requestFullscreen(); } },
+              React.createElement("span", { style: { fontSize: 16 } }, isFullscreen ? "⤡" : "⤢")),
+            // Keyboard shortcuts
+            React.createElement("button", { className: "icon-btn", title: "Keyboard shortcuts (?)",
+              onClick: () => setShowShortcuts(true) },
+              React.createElement(Icon, { name: "settings", size: 18 }))),
 
           React.createElement(ErrorBoundary, { key: view },
           React.createElement("div", { className: "view" },
@@ -232,7 +283,29 @@
             view === "accounts" && React.createElement(Auth.AccountsView)))),
 
         React.createElement(Auth.AccountSwitcher, { open: switchOpen, onClose: () => setSwitchOpen(false), current: user, onSwitch: setUser }),
-        window.NZTweaks && React.createElement(window.NZTweaks)));
+        window.NZTweaks && React.createElement(window.NZTweaks),
+        // Keyboard shortcut cheat-sheet modal
+        showShortcuts && React.createElement("div", {
+          onClick: () => setShowShortcuts(false),
+          style: { position: "fixed", inset: 0, zIndex: 200, background: "rgba(8,5,14,0.7)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 24 } },
+          React.createElement("div", { onClick: (e) => e.stopPropagation(), className: "panel", style: { width: 480, maxWidth: "100%", maxHeight: "80vh", overflow: "auto", padding: 24 } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", marginBottom: 20 } },
+              React.createElement("h3", { style: { fontFamily: "var(--display)", fontSize: 18, color: "var(--gold-bright)" } }, "Keyboard Shortcuts"),
+              React.createElement("div", { style: { flex: 1 } }),
+              React.createElement("button", { className: "icon-btn", onClick: () => setShowShortcuts(false), style: { width: 28, height: 28 } }, "✕")),
+            [["?", "Open this shortcut guide"],
+             ["Escape", "Close any modal or overlay"],
+             ["Space", "Next initiative turn (battle map)"],
+             ["D", "Open dice tray (battle map)"],
+             ["F", "Toggle fog tool (battle map)"],
+             ["R", "Roll initiative (battle map)"],
+             ["📜", "Parchment light theme toggle (topbar)"],
+             ["⤢", "Fullscreen mode (topbar)"],
+             ["🔊", "Toggle sound effects (topbar)"]].map(function(row) {
+              return React.createElement("div", { key: row[0], style: { display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: "1px solid var(--hair)" } },
+                React.createElement("kbd", { style: { fontFamily: "var(--mono)", fontSize: 12, background: "var(--surface-2)", border: "1px solid var(--hair)", borderRadius: 6, padding: "3px 8px", whiteSpace: "nowrap", minWidth: 32, textAlign: "center", color: "var(--gold)" } }, row[0]),
+                React.createElement("span", { style: { fontSize: 14, color: "var(--ink-soft)" } }, row[1]));
+            }))));
   }
 
   function Recaps({ recaps, setRecaps, stats }) {

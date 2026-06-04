@@ -122,12 +122,21 @@
   // ---- Accounts admin view ----
   function AccountsView() {
     const ctx = useContext(RoleContext);
-    const [accts, setAccts] = useState(ACCOUNTS);
+    const [accts, setAccts] = useState(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("nz_roles") || "{}");
+        return ACCOUNTS.map((a) => saved[a.id] ? { ...a, role: saved[a.id] } : a);
+      } catch(e) { return ACCOUNTS; }
+    });
     const [photoTick, setPhotoTick] = useState(0); // force re-render after photo upload
     const manage = can(ctx.role, "manageAccounts");
     // Any user can upload their own photo; DM can upload all
     const canUploadPhoto = (acctName) => manage || (ctx.user && ctx.user.name === acctName);
-    function setRole(id, role) { if (manage) setAccts((a) => a.map((x) => x.id === id ? { ...x, role } : x)); }
+    function setRole(id, role) {
+      if (!manage) return;
+      setAccts((a) => a.map((x) => x.id === id ? { ...x, role } : x));
+      try { const s = JSON.parse(localStorage.getItem("nz_roles") || "{}"); s[id] = role; localStorage.setItem("nz_roles", JSON.stringify(s)); } catch(e) {}
+    }
     function uploadPhoto(name, e) {
       const file = e.target.files[0]; if (!file) return;
       const reader = new FileReader();

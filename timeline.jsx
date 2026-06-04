@@ -63,13 +63,35 @@
           React.createElement("button", { className: "btn primary", onClick: function() { onSave({ time: time, events: evts }); } }, "Save"))));
   }
 
+  // ── Emoji reaction row ───────────────────────────────────────────────────
+  var REACTION_EMOJIS = ["🔥","🎲","💀","😂","❤️","👏","🏆","😬"];
+  function ReactionRow(props) {
+    var recapId = props.recapId, reactions = props.reactions || {}, onReact = props.onReact;
+    var openState = useState(false); var open = openState[0], setOpen = openState[1];
+    var existing = Object.entries(reactions).filter(function(e) { return e[1] > 0; });
+    return React.createElement("div", { style: { marginTop: 8, display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center", maxWidth: 210, position: "relative" } },
+      existing.map(function(e) {
+        return React.createElement("button", { key: e[0], onClick: function() { onReact && onReact(recapId, e[0]); },
+          style: { background: "rgba(232,181,74,0.12)", border: "1px solid rgba(232,181,74,0.3)", borderRadius: 100, padding: "2px 8px", cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 3 } },
+          e[0], React.createElement("span", { style: { fontSize: 10, color: "var(--gold)", fontFamily: "var(--mono)" } }, e[1]));
+      }),
+      React.createElement("button", { onClick: function() { setOpen(function(x) { return !x; }); }, title: "Add reaction",
+        style: { background: "var(--surface-2)", border: "1px solid var(--hair)", borderRadius: 100, padding: "2px 8px", cursor: "pointer", fontSize: 11, color: "var(--ink-dim)" } }, "＋"),
+      open && React.createElement("div", { style: { position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", background: "var(--surface-3)", border: "1px solid var(--hair)", borderRadius: 10, padding: "6px 8px", display: "flex", gap: 4, zIndex: 20, boxShadow: "0 4px 16px rgba(0,0,0,0.5)" } },
+        REACTION_EMOJIS.map(function(em) {
+          return React.createElement("button", { key: em, onClick: function() { onReact && onReact(recapId, em); setOpen(false); },
+            style: { background: "none", border: "none", cursor: "pointer", fontSize: 20, borderRadius: 6, padding: "2px 4px" } }, em);
+        })));
+  }
+
   // ── SessionNode (individual session on the timeline) ─────────────────────
-  var CIRCLE = 52; // circle diameter
-  var PAD_TOP = 68; // space above circle — keeps circle visually centred on the line
+  var CIRCLE = 52;
+  var PAD_TOP = 68;
 
   function SessionNode(props) {
     var recap = props.recap, num = props.num, isDM = props.isDM;
     var onEdit = props.onEdit, onDelete = props.onDelete, onEditGap = props.onEditGap;
+    var onReact = props.onReact;
     var gap = props.gap;
     var expandState = useState(false); var expanded = expandState[0], setExpanded = expandState[1];
     var isFirst = props.isFirst;
@@ -114,7 +136,10 @@
           React.createElement("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" } },
             (recap.tags || []).slice(0, 2).map(function(t) { return React.createElement("span", { key: t, style: { fontSize: 10, background: "rgba(232,181,74,0.14)", border: "1px solid rgba(232,181,74,0.3)", borderRadius: 100, padding: "2px 7px", color: "var(--gold-deep)", whiteSpace: "nowrap" } }, t); }))),
         // Expanded recap body
-        expanded && recap.body && React.createElement("div", { style: { margin: "12px 8px 0", padding: 14, background: "var(--surface)", borderRadius: 12, fontSize: 13, color: SOFT, lineHeight: 1.65, textAlign: "left", maxWidth: 200, border: "1px solid var(--hair)", boxShadow: "0 4px 16px rgba(0,0,0,0.28)" } }, recap.body)));
+        expanded && recap.body && React.createElement("div", { style: { margin: "12px 8px 0", padding: 14, background: "var(--surface)", borderRadius: 12, fontSize: 13, color: SOFT, lineHeight: 1.65, textAlign: "left", maxWidth: 200, border: "1px solid var(--hair)", boxShadow: "0 4px 16px rgba(0,0,0,0.28)" } }, recap.body),
+        // Emoji reactions — all users can react
+        React.createElement(ReactionRow, { recapId: recap.id, reactions: recap.reactions || {}, onReact: onReact })
+      );
   }
 
   // Inject CSS to hide native scrollbar on the timeline scroll container
@@ -209,6 +234,15 @@
       setEditR(null);
     }
     function deleteRecap(id) { if (confirm("Delete this session?")) { setRecaps(function(rs) { return rs.filter(function(r) { return r.id !== id; }); }); } }
+    function reactToRecap(recapId, emoji) {
+      setRecaps(function(rs) {
+        return rs.map(function(r) {
+          if (r.id !== recapId) return r;
+          var cur = (r.reactions || {})[emoji] || 0;
+          return Object.assign({}, r, { reactions: Object.assign({}, r.reactions || {}, { [emoji]: cur + 1 }) });
+        });
+      });
+    }
 
     function downloadRecaps() {
       var text = sorted.map(function(r) { return "=== Ep " + r.num + ": " + r.title + " (" + (r.date || "") + ") ===\n" + (r.body || "") + "\nTags: " + (r.tags || []).join(", "); }).join("\n\n");
@@ -268,7 +302,8 @@
                       gap: getGap(recap.id), isFirst: i === 0,
                       onEdit: function() { setEditR(recap); },
                       onDelete: function() { deleteRecap(recap.id); },
-                      onEditGap: function() { setEditG(recap.id); } });
+                      onEditGap: function() { setEditG(recap.id); },
+                      onReact: reactToRecap });
                   }),
                   canEdit && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 100, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
                     React.createElement("div", { style: { width: "50%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), transparent)", marginBottom: 6, flexShrink: 0 } }),

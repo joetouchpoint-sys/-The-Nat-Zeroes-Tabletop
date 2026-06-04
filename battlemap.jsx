@@ -142,6 +142,8 @@
     const [condPickerUid, setCondPickerUid] = useState(null); // uid of token showing condition picker
     const [noteEdit, setNoteEdit] = useState(false);
     const [encounters, setEncounters] = useState(() => lsGet("nz_encounters", []));
+    const [boardPresets, setBoardPresets] = useState(() => lsGet("nz_boardpresets", []));
+    useEffect(() => { lsSet("nz_boardpresets", boardPresets); }, [boardPresets]);
     const [prepOpen, setPrepOpen] = useState(false);
     const [prep, setPrep] = useState(() => lsGet("nz_prep", ["Place tokens","Set fog","Prep encounter","Cue music","Check initiative"].map((t, i) => ({ id: i, text: t, done: false }))));
     const [soundUrl, setSoundUrl] = useState("");
@@ -693,7 +695,15 @@
       ),
       // ===== RIGHT: initiative panel =====
       React.createElement(InitiativePanel, { order, activeUid, round, turnIdx, nextTurn, rollInitiative, selected, setSelected, damage,
-        timerLeft, timerSecs, setTimerSecs, timerOn, combatLog, mapLog }),
+        timerLeft, timerSecs, setTimerSecs, timerOn, combatLog, mapLog, canEdit,
+        boardPresets, onSavePreset: (name) => {
+          const tokens = (tokensByMap[activeMapId] || []).filter((t) => t.kind === "enemy");
+          setBoardPresets((ps) => [...ps, { id: "pr" + Date.now(), name, tokens }]);
+        },
+        onDeployPreset: (preset) => {
+          setTokensByMap((m) => ({ ...m, [activeMapId]: [...(m[activeMapId] || []).filter((t) => t.kind !== "enemy"), ...preset.tokens] }));
+        },
+        onDeletePreset: (id) => setBoardPresets((ps) => ps.filter((p) => p.id !== id)) }),
       // modals
       React.createElement(UploadMapModal, { open: uploadOpen, onClose: () => setUploadOpen(false), onUpload: handleUpload }),
       React.createElement(AddTokenModal, { open: addOpen, onClose: () => setAddOpen(false), party, bestiary, onAdd: addToken }),
@@ -885,9 +895,25 @@
   }
 
   // ---------- Initiative panel ----------
+  const CR_XP = {"0":10,"1/8":25,"1/4":50,"1/2":100,"1":200,"2":450,"3":700,"4":1100,"5":1800,"6":2300,"7":2900,"8":3900,"9":5000,"10":5900,"11":7200,"12":8400,"13":10000,"14":11500,"15":13000,"16":15000,"17":18000,"18":20000,"19":22000,"20":25000};
+  function crToXP(cr) { return CR_XP[String(cr)] || 0; }
+  function xpDifficulty(xp) {
+    if (xp <= 0) return null;
+    if (xp < 800) return { label: "Easy", color: "var(--emerald)" };
+    if (xp < 3000) return { label: "Medium", color: "var(--gold)" };
+    if (xp < 10000) return { label: "Hard", color: "var(--red)" };
+    return { label: "Deadly ☠️", color: "#ff3366" };
+  }
+
   function InitiativePanel({ order, activeUid, round, turnIdx, nextTurn, rollInitiative, selected, setSelected, damage,
-      timerLeft, timerSecs, setTimerSecs, timerOn, combatLog, mapLog }) {
+      timerLeft, timerSecs, setTimerSecs, timerOn, combatLog, mapLog, canEdit,
+      boardPresets, onSavePreset, onDeployPreset, onDeletePreset }) {
     const pct = timerSecs > 0 ? (timerLeft / timerSecs) * 100 : 0;
+    const [showPresets, setShowPresets] = React.useState(false);
+    const [presetName, setPresetName] = React.useState("");
+    const enemies = order.filter((t) => t.kind === "enemy" || (!t.kind && !t.isParty));
+    const totalXP = enemies.reduce((s, t) => s + crToXP(t.cr || t.initMod || 0), 0);
+    const diff = xpDifficulty(totalXP);
     const timerColor = pct > 50 ? "var(--emerald)" : pct > 20 ? "var(--gold)" : "var(--red)";
     const [logTab, setLogTab] = React.useState("combat"); // "combat" | "dice"
     return React.createElement("div", { style: { borderLeft: "1px solid var(--hair)", background: "var(--bg-2)", display: "flex", flexDirection: "column", minHeight: 0 } },
@@ -896,7 +922,23 @@
         React.createElement(Icon, { name: "swords", size: 18, style: { color: "var(--gold-bright)" } }),
         React.createElement("h3", null, "Initiative"),
         React.createElement("div", { className: "spacer" }),
+        canEdit && React.createElement("button", { className: "icon-btn", style: { width: 28, height: 28, fontSize: 14 }, title: "Encounter presets", onClick: () => setShowPresets((x) => !x) }, "🗂"),
         React.createElement("span", { className: "tag gold" }, "Round " + round)),
+      // Encounter XP & difficulty
+      diff && React.createElement("div", { style: { padding: "6px 12px", borderBottom: "1px solid var(--hair)", display: "flex", alignItems: "center", gap: 8, background: "rgba(0,0,0,0.2)", fontSize: 12 } },
+        React.createElement("span", { style: { color: "var(--ink-dim)" } }, "⚔ XP: "),
+        React.createElement("span", { className: "mono", style: { color: "var(--gold)", fontWeight: 700 } }, totalXP.toLocaleString()),
+        React.createElement("span", { style: { color: diff.color, fontWeight: 700, marginLeft: 4 } }, diff.label)),
+      // Preset panel
+      showPresets && canEdit && React.createElement("div", { style: { padding: 10, borderBottom: "1px solid var(--hair)", background: "var(--surface)" } },
+        React.createElement("div", { style: { fontSize: 11, color: "var(--ink-dim)", marginBottom: 6, fontFamily: "var(--display)", letterSpacing: "0.1em", textTransform: "uppercase" } }, "Encounter Presets"),
+        (boardPresets || []).map((p) => React.createElement("div", { key: p.id, style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 4, fontSize: 12 } },
+          React.createElement("span", { style: { flex: 1, color: "var(--ink-soft)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, p.name + " (" + p.tokens.length + ")"),
+          React.createElement("button", { className: "btn sm", style: { padding: "2px 8px", fontSize: 11 }, onClick: () => onDeployPreset && onDeployPreset(p) }, "Deploy"),
+          React.createElement("button", { onClick: () => onDeletePreset && onDeletePreset(p.id), style: { background: "none", border: "none", color: "var(--red-bright)", cursor: "pointer", fontSize: 13 } }, "✕"))),
+        React.createElement("div", { style: { display: "flex", gap: 4, marginTop: 6 } },
+          React.createElement("input", { className: "input", value: presetName, onChange: (e) => setPresetName(e.target.value), placeholder: "Preset name…", style: { flex: 1, fontSize: 12, padding: "4px 8px" } }),
+          React.createElement("button", { className: "btn sm primary", disabled: !presetName.trim(), onClick: () => { onSavePreset && onSavePreset(presetName.trim()); setPresetName(""); } }, "Save"))),
       // Action buttons + timer
       React.createElement("div", { style: { padding: "10px 12px", borderBottom: "1px solid var(--hair)" } },
         React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8 } },

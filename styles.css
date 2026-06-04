@@ -433,3 +433,83 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 600; margin: 0; lette
   /* Section titles compact */
   .section-title { margin-bottom: 10px; }
 }
+
+/* ============================================================
+   Parchment light theme
+   ============================================================ */
+.parchment-theme {
+  --bg:        #f4edd8;
+  --bg-2:      #ede4cc;
+  --surface:   #e8dfc6;
+  --surface-2: #dfd4b4;
+  --surface-3: #d5c99e;
+  --panel-edge: rgba(120, 88, 30, 0.22);
+  --hair:      rgba(100, 72, 20, 0.15);
+  --hair-2:    rgba(100, 72, 20, 0.22);
+
+  --ink:       #2a1f0e;
+  --ink-soft:  #4a3820;
+  --ink-dim:   #7a6040;
+  --ink-faint: #9a8060;
+  --parchment: #efe2c6;
+  --parchment-ink: #2a1f0e;
+
+  --gold:        #9a6010;
+  --gold-bright: #c07820;
+  --gold-deep:   #704008;
+
+  --glow-gold: 0 0 20px rgba(154, 96, 16, 0.25);
+
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(180,140,80,0.12), transparent 60%),
+    radial-gradient(900px 600px at 8% 108%, rgba(180,100,40,0.08), transparent 55%),
+    var(--bg);
+  color: var(--ink);
+}
+
+.parchment-theme .rail {
+  background: linear-gradient(180deg, rgba(220,200,160,0.8), rgba(200,180,140,0.8)), var(--bg-2);
+  border-right: 1px solid var(--hair);
+}
+
+.parchment-theme .topbar {
+  background: linear-gradient(180deg, rgba(230,215,180,0.9), rgba(220,200,160,0.6));
+  border-bottom: 1px solid var(--hair);
+}
+
+.parchment-theme .nav-item.active {
+  background: linear-gradient(90deg, rgba(154,96,16,0.14), rgba(154,96,16,0.04));
+  color: var(--gold-deep);
+  border-color: var(--panel-edge);
+}
+
+.parchment-theme .panel {
+  background: linear-gradient(180deg, var(--surface), var(--bg-2));
+  border-color: var(--hair-2);
+}
+
+.parchment-theme .input, .parchment-theme .select, .parchment-theme textarea.input {
+  background: var(--bg);
+  color: var(--ink);
+  border-color: var(--hair-2);
+}
+
+.parchment-theme .btn {
+  background: var(--surface-2);
+  border-color: var(--hair-2);
+  color: var(--ink);
+}
+
+.parchment-theme .btn:hover { background: var(--surface-3); }
+
+.parchment-theme .btn.primary {
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep));
+  color: #fff8e8;
+  border-color: var(--gold-deep);
+}
+
+.parchment-theme ::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--surface-3), var(--surface-2));
+}
+
+.parchment-theme ::selection { background: rgba(154,96,16,0.25); }

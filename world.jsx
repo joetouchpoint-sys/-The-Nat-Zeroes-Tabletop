@@ -68,6 +68,16 @@
     const [drawingPath, setDrawingPath] = useState(false);
     const [freehand, setFreehand] = useState(false);
     const [previewPts, setPreviewPts] = useState(null);
+    const [measuring, setMeasuring] = useState(false);
+    const [measureFrom, setMeasureFrom] = useState(null); // loc id
+    const [measureResult, setMeasureResult] = useState(null); // {from, to, days}
+    const WEATHERS = ["☀️ Clear", "🌤️ Cloudy", "🌧️ Rain", "⛈️ Storm", "❄️ Snow", "🌫️ Fog", "🌕 Full Moon"];
+    const [weather, setWeather] = useState(() => { try { return localStorage.getItem("nz_weather") || ""; } catch(e) { return ""; } });
+    function cycleWeather() {
+      const next = weather ? (WEATHERS[(WEATHERS.indexOf(weather) + 1) % WEATHERS.length]) : WEATHERS[0];
+      setWeather(next); try { localStorage.setItem("nz_weather", next); } catch(e) {}
+    }
+    function clearWeather() { setWeather(""); try { localStorage.removeItem("nz_weather"); } catch(e) {} }
     const freehandActiveRef = useRef(false);
     const freehandPtsRef = useRef([]);
     freehandActiveRef.current = freehand;
@@ -177,6 +187,9 @@
       return () => {
         el.removeEventListener("wheel", onWheel);
         el.removeEventListener("pointerdown", onContainerPointerDown);
+        // Clean up any in-progress freehand stroke listeners if component unmounts mid-draw
+        window.removeEventListener("pointermove", onFreehandMove);
+        window.removeEventListener("pointerup", onFreehandUp);
       };
     }, [panX, panY, is3d, zoom, freehand, pathColor]);
 
@@ -205,15 +218,26 @@
       window.removeEventListener("pointerup", onMapPointerUp);
     }
 
-    // Path drawing: click first pin, then click second pin → instant straight path
+    // Distance calculation: map % coords → approx travel days
+    function calcDistance(a, b) {
+      const pct = Math.sqrt((b.x-a.x)**2 + (b.y-a.y)**2);
+      return { pct: pct.toFixed(1), days: Math.max(1, Math.round(pct * 0.55)) };
+    }
+
+    // Path drawing / measuring: click first pin, then second
     function handlePinClick(locId) {
+      if (measuring) {
+        if (!measureFrom) { setMeasureFrom(locId); return; }
+        if (measureFrom === locId) { setMeasureFrom(null); setMeasureResult(null); return; }
+        const a = locs.find((l) => l.id === measureFrom), b = locs.find((l) => l.id === locId);
+        if (a && b) setMeasureResult({ from: a.name, to: b.name, ...calcDistance(a, b) });
+        setMeasureFrom(null); return;
+      }
       if (drawingPath && canEdit) {
         if (!pathingFrom) { setPathingFrom(locId); return; }
-        if (pathingFrom === locId) { setPathingFrom(null); return; } // cancel
-        // Create path immediately (no waypoints — user drags segments to add bends)
+        if (pathingFrom === locId) { setPathingFrom(null); return; }
         setCustomPaths && setCustomPaths((ps) => [...ps, { id: "p" + Date.now(), from: pathingFrom, to: locId, color: pathColor, waypoints: [] }]);
-        setPathingFrom(null);
-        return;
+        setPathingFrom(null); return;
       }
       setSel(locId === sel ? null : locId);
     }
@@ -387,21 +411,37 @@
           React.createElement("button", { className: "btn sm" + (is3d ? " primary" : " ghost"), onClick: () => setIs3d((x) => !x) },
             React.createElement(Icon, { name: "layers", size: 14 }), is3d ? "2D" : "3D"),
           React.createElement("span", { className: "tag gold" }, discovered.length + " / " + locs.length + " discovered"),
+          // Weather pill — DM can set, all can see
+          (weather || canEdit) && React.createElement("button", {
+            className: "btn sm ghost", title: canEdit ? "Click to cycle weather/time conditions" : undefined,
+            onClick: canEdit ? cycleWeather : undefined,
+            style: { cursor: canEdit ? "pointer" : "default", gap: 5 } },
+            weather || "🌍 Set weather",
+            canEdit && weather && React.createElement("span", { onClick: (e) => { e.stopPropagation(); clearWeather(); }, style: { marginLeft: 2, opacity: 0.6, fontSize: 11 } }, "✕")),
+          // Distance result banner
+          measureResult && React.createElement("div", { style: { background: "rgba(145,112,240,0.2)", border: "1px solid rgba(145,112,240,0.4)", borderRadius: 8, padding: "4px 10px", fontSize: 12, color: "var(--amethyst)", display: "flex", alignItems: "center", gap: 8 } },
+            React.createElement("span", null, "📏 " + measureResult.from + " → " + measureResult.to + ": ~" + measureResult.days + " day" + (measureResult.days !== 1 ? "s" : "") + " travel"),
+            React.createElement("span", { onClick: () => setMeasureResult(null), style: { cursor: "pointer", opacity: 0.6 } }, "✕")),
           canEdit && React.createElement(React.Fragment, null,
             React.createElement("input", { ref: bgInputRef, type: "file", accept: "image/*", hidden: true, onChange: handleBgUpload }),
             bgImg && React.createElement("button", { className: "btn sm ghost", onClick: () => onBgImgChange && onBgImgChange(null), title: "Clear custom background" },
               React.createElement(Icon, { name: "x", size: 13 }), "Clear bg"),
             React.createElement("button", { className: "btn sm ghost", onClick: () => bgInputRef.current.click() },
               React.createElement(Icon, { name: "upload", size: 14 }), "Map image"),
+            // Distance measuring tool
+            React.createElement("button", { className: "btn sm" + (measuring ? " primary" : " ghost"),
+              title: measuring ? "Click two pins to measure travel distance between them" : "Measure travel time between locations",
+              onClick: () => { setMeasuring((x) => !x); setMeasureFrom(null); setMeasureResult(null); setDrawingPath(false); setFreehand(false); } },
+              "📏 " + (measuring ? (measureFrom ? "click destination…" : "click origin…") : "Measure")),
             // Pin-to-pin path drawing
             React.createElement("button", { className: "btn sm" + (drawingPath ? " primary" : " ghost"),
-              title: drawingPath ? "Click first pin then second pin to draw path. Drag midpoint dots to bend it." : "Draw a path between two location pins",
-              onClick: () => { setDrawingPath((x) => !x); setPathingFrom(null); if (!drawingPath) setFreehand(false); } },
+              title: drawingPath ? "Click first pin then second pin to draw path." : "Draw a path between two location pins",
+              onClick: () => { setDrawingPath((x) => !x); setPathingFrom(null); if (!drawingPath) { setFreehand(false); setMeasuring(false); } } },
               "〜 " + (drawingPath ? (pathingFrom ? "click end pin…" : "click start pin…") : "Draw path")),
             // Freehand path drawing
             React.createElement("button", { className: "btn sm" + (freehand ? " primary" : " ghost"),
-              title: freehand ? "Click and drag to sketch a path — release to smooth it" : "Sketch a freehand path anywhere on the map",
-              onClick: () => { setFreehand((x) => !x); if (!freehand) { setDrawingPath(false); setPathingFrom(null); } } },
+              title: freehand ? "Click and drag to sketch a path" : "Sketch a freehand path anywhere",
+              onClick: () => { setFreehand((x) => !x); if (!freehand) { setDrawingPath(false); setPathingFrom(null); setMeasuring(false); } } },
               "✏ " + (freehand ? "Sketching…" : "Freehand")),
             (drawingPath || freehand) && React.createElement("div", { style: { display: "flex", gap: 4 } },
               PATH_COLORS.map((c) => React.createElement("button", { key: c, onClick: () => setPathColor(c),
@@ -418,7 +458,8 @@
       selLoc && React.createElement(LocationPanel, { loc: selLoc, maps, canEdit, onClose: () => setSel(null), onOpenMap,
         onToggleDiscovered: () => toggleDiscovered(selLoc.id),
         onEdit: () => setEditLoc(selLoc),
-        onDelete: () => deleteLoc(selLoc.id) }),
+        onDelete: () => deleteLoc(selLoc.id),
+        onSaveLoc: saveLoc }),
 
       // Modals
       React.createElement(LocationForm, { open: addOpen || !!editLoc, loc: editLoc, maps, onClose: () => { setAddOpen(false); setEditLoc(null); }, onSave: saveLoc })
@@ -624,10 +665,18 @@
         undiscovered ? "Undiscovered" : loc.name));
   }
 
-  function LocationPanel({ loc, maps, canEdit, onClose, onOpenMap, onToggleDiscovered, onEdit, onDelete }) {
+  function LocationPanel({ loc, maps, canEdit, onClose, onOpenMap, onToggleDiscovered, onEdit, onDelete, onSaveLoc }) {
     const t = TYPES[loc.type] || TYPES.landmark;
     const allMapsForPanel = maps.concat((function() { try { return JSON.parse(localStorage.getItem("nz_custommaps") || "[]"); } catch(e) { return []; } })());
     const locMaps = loc.maps.map((id) => allMapsForPanel.find((m) => m.id === id)).filter(Boolean);
+    const [newNote, setNewNote] = useState("");
+    const notes = loc.notes || [];
+    function addNote() {
+      if (!newNote.trim()) return;
+      onSaveLoc && onSaveLoc({ ...loc, notes: [...notes, { id: "n" + Date.now(), text: newNote.trim(), date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }) }] });
+      setNewNote("");
+    }
+    function deleteNote(id) { onSaveLoc && onSaveLoc({ ...loc, notes: notes.filter((n) => n.id !== id) }); }
     return React.createElement("div", { style: { borderLeft: "1px solid var(--hair)", background: "var(--bg-2)", display: "flex", flexDirection: "column", minHeight: 0, overflow: "auto" } },
       React.createElement("div", { className: "panel-h", style: { borderRadius: 0 } },
         React.createElement("span", { style: { color: t.color } }, React.createElement(Icon, { name: t.icon, size: 18 })),
@@ -638,6 +687,22 @@
         React.createElement("h2", { style: { fontSize: 22, color: "var(--ink)" } }, loc.name),
         !loc.discovered && React.createElement("span", { className: "tag", style: { alignSelf: "flex-start" } }, "Undiscovered · hidden from players"),
         React.createElement("p", { className: "muted", style: { margin: 0, fontSize: 14, lineHeight: 1.6 } }, loc.desc),
+        // Location news feed (DM notes)
+        canEdit && React.createElement(React.Fragment, null,
+          React.createElement("div", { className: "section-title", style: { margin: "4px 0 0" } }, "DM Notes"),
+          notes.length === 0 && React.createElement("div", { className: "muted", style: { fontSize: 12 } }, "No notes yet. Add one below."),
+          React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+            notes.map((n) => React.createElement("div", { key: n.id, style: { display: "flex", alignItems: "flex-start", gap: 8, background: "var(--surface)", borderRadius: 8, padding: "8px 10px", fontSize: 13 } },
+              React.createElement("div", { style: { flex: 1, color: "var(--ink-soft)", lineHeight: 1.45 } },
+                n.date && React.createElement("span", { style: { color: "var(--gold-deep)", fontSize: 11, fontFamily: "var(--mono)", marginRight: 6 } }, n.date),
+                n.text),
+              React.createElement("button", { onClick: () => deleteNote(n.id), style: { background: "none", border: "none", color: "var(--red-bright)", cursor: "pointer", fontSize: 13, opacity: 0.7, padding: "0 2px", flexShrink: 0 } }, "✕")))),
+          React.createElement("div", { style: { display: "flex", gap: 6 } },
+            React.createElement("input", { className: "input", value: newNote, onChange: (e) => setNewNote(e.target.value),
+              placeholder: "Add a note… (e.g. 'Goblins spotted - Session 8')",
+              onKeyDown: (e) => e.key === "Enter" && addNote(),
+              style: { flex: 1, fontSize: 13 } }),
+            React.createElement("button", { className: "btn sm primary", onClick: addNote, disabled: !newNote.trim() }, "+"))),
         React.createElement("div", { className: "section-title", style: { margin: "4px 0 0" } }, "Saved maps · " + locMaps.length),
         locMaps.length === 0 && React.createElement("div", { className: "muted", style: { fontSize: 13 } }, "No maps saved here yet."),
         locMaps.map((m) => React.createElement("div", { key: m.id, className: "panel", style: { overflow: "hidden" } },

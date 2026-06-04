@@ -20,11 +20,13 @@
     const [editingDiscord, setEditingDiscord] = useState(false);
     const [discordVal, setDiscordVal] = useState(discordLink);
     const [copied, setCopied] = useState(false);
+    var copiedTimerRef = React.useRef(null);
     function saveDiscord() { setDiscordLink(discordVal); try { localStorage.setItem("nz_discordlink", discordVal); } catch(e) {} setEditingDiscord(false); }
 
     function exportICS() {
       var lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Nat Zeroes//VTT//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:Nat Zeroes Sessions","X-WR-CALDESC:D&D session schedule for The Nat Zeroes"];
-      sess.filter(function(s) { return s.date; }).forEach(function(s) {
+      // Guard: only include sessions with a valid ISO date
+      sess.filter(function(s) { return s.date && /^\d{4}-\d{2}-\d{2}$/.test(s.date); }).forEach(function(s) {
         var parts = s.date.split("-").map(Number);
         var y = parts[0], mo = parts[1], d = parts[2];
         var hour = 19, min = 0;
@@ -55,8 +57,13 @@
         "",
         "👍 In: " + counts.in + "  ❔ Maybe: " + counts.maybe + "  👎 Out: " + counts.out
       ].join("\n");
+      function doCopy(txt) {
+        if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+        setCopied(true);
+        copiedTimerRef.current = setTimeout(function() { setCopied(false); copiedTimerRef.current = null; }, 2200);
+      }
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(function() { setCopied(true); setTimeout(function() { setCopied(false); }, 2200); }).catch(function() { prompt("Copy for Discord:", text); });
+        navigator.clipboard.writeText(text).then(function() { doCopy(text); }).catch(function() { prompt("Copy for Discord:", text); });
       } else { prompt("Copy for Discord:", text); }
     }
 

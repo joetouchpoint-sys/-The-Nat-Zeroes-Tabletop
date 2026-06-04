@@ -49,7 +49,7 @@
 
     // Personal greeting
     const isDMUser = ctx.role === "dm";
-    const char = party.find((p) => p.player === user?.name);
+    const char = (party || []).find((p) => p.player === user?.name);
     const playerName = user?.name || "Adventurer";
     const charName = char?.name || "your character";
     // Hourly rotation so it changes each time you re-open the site (not just daily)
