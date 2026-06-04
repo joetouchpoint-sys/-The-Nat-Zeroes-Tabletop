@@ -291,7 +291,7 @@
       // ===== Map stage =====
       // Outer container: shows "table" around the tilted map card in 3D
       React.createElement("div", { ref: mapContainerRef, style: { position: "relative", minWidth: 0, overflow: "hidden",
-        background: is3d ? "#6ab0d8" : "#0c1418",
+        background: is3d ? "#0d0a14" : "#0c1418",
         cursor: freehand ? "crosshair" : "default" } },
         // Three.js outdoor scene — flat, fills entire container behind the tilted map card
         is3d && React.createElement(WorldScene3D, null),
@@ -469,7 +469,7 @@
       } })));
   }
 
-  // Three.js outdoor forest camp scene — DAYTIME (shows BEHIND the tilted map card in 3D mode)
+  // Three.js dungeon room scene — same dark-room aesthetic as the battle map (behind the tilted world map card)
   function WorldScene3D() {
     const mountRef = useRef(null);
     useEffect(function() {
@@ -477,109 +477,90 @@
       const cont = mountRef.current;
       const w = cont.clientWidth, h = cont.clientHeight;
       const scene = new T.Scene();
-      scene.fog = new T.Fog(0x87ceeb, 40, 130);
+      scene.fog = new T.FogExp2(0x0d0a14, 0.010);
       const renderer = new T.WebGLRenderer({ antialias: true });
       renderer.setSize(w, h); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
-      renderer.setClearColor(0x87ceeb, 1); // daytime sky blue
-      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x0d0a14, 1);
+      renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
       cont.appendChild(renderer.domElement);
       const camera = new T.PerspectiveCamera(50, w / h, 0.1, 200);
-      camera.position.set(0, 4, 12); camera.lookAt(0, 1.5, 0);
+      camera.position.set(0, 7, 15); camera.lookAt(0, 0, 0);
 
-      // Lighting — bright daytime
-      scene.add(new T.HemisphereLight(0x87ceeb, 0x5a9a30, 1.3)); // sky blue top, grass green bottom
-      const sun = new T.DirectionalLight(0xfff8e0, 2.0); sun.position.set(10, 20, 8); sun.castShadow = true; scene.add(sun);
-      scene.add(new T.AmbientLight(0xb8d8f8, 0.5)); // soft blue sky fill
+      // Lighting — warm torchlight dungeon
+      scene.add(new T.HemisphereLight(0x9a8aaa, 0x1a1020, 0.45));
+      var key = new T.DirectionalLight(0xfff0d8, 0.9); key.position.set(8, 18, 10); key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024); scene.add(key);
+      var fill = new T.DirectionalLight(0x9170f0, 0.22); fill.position.set(-10, 6, -8); scene.add(fill);
 
-      // Visible sun sphere in sky
-      var sunSphere = new T.Mesh(new T.SphereGeometry(1.8, 16, 12), new T.MeshBasicMaterial({ color: 0xffee88 }));
-      sunSphere.position.set(20, 24, -22); scene.add(sunSphere);
-      var sunGlow = new T.Mesh(new T.SphereGeometry(3.2, 16, 12), new T.MeshBasicMaterial({ color: 0xfffbcc, transparent: true, opacity: 0.22 }));
-      sunGlow.position.copy(sunSphere.position); scene.add(sunGlow);
+      // Stone floor
+      var floorCv = document.createElement("canvas"); floorCv.width = 512; floorCv.height = 512;
+      var fc = floorCv.getContext("2d");
+      fc.fillStyle = "#1e1828"; fc.fillRect(0, 0, 512, 512);
+      for (var i = 0; i < 600; i++) {
+        fc.fillStyle = "rgba(" + (20 + Math.floor(Math.random()*15)) + "," + (14 + Math.floor(Math.random()*10)) + "," + (28 + Math.floor(Math.random()*10)) + ",0.4)";
+        var rr = 4 + Math.random()*20; fc.beginPath(); fc.arc(Math.random()*512, Math.random()*512, rr, 0, 7); fc.fill();
+      }
+      fc.strokeStyle = "rgba(255,255,255,0.05)"; fc.lineWidth = 2;
+      for (var i = 0; i < 512; i += 64) { fc.beginPath(); fc.moveTo(i,0); fc.lineTo(i,512); fc.stroke(); fc.beginPath(); fc.moveTo(0,i); fc.lineTo(512,i); fc.stroke(); }
+      var floorTex = new T.CanvasTexture(floorCv); floorTex.wrapS = T.RepeatWrapping; floorTex.wrapT = T.RepeatWrapping; floorTex.repeat.set(8, 8);
+      var floor = new T.Mesh(new T.PlaneGeometry(80, 80), new T.MeshStandardMaterial({ map: floorTex, roughness: 0.95 }));
+      floor.rotation.x = -Math.PI / 2; floor.position.y = -5; floor.receiveShadow = true; scene.add(floor);
 
-      // Ground — bright grassy terrain
-      const groundTex = (function() {
-        const cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
-        const x = cv.getContext("2d");
-        x.fillStyle = "#4e8a2e"; x.fillRect(0, 0, 256, 256);
-        for (var i = 0; i < 600; i++) {
-          var r = 40 + Math.floor(Math.random()*30), g = 90 + Math.floor(Math.random()*55), b = 15 + Math.floor(Math.random()*20);
-          x.fillStyle = "rgba(" + r + "," + g + "," + b + ",0.55)";
-          x.beginPath(); x.arc(Math.random()*256, Math.random()*256, 1 + Math.random()*7, 0, 7); x.fill();
+      // Stone brick walls
+      var wallCv = document.createElement("canvas"); wallCv.width = 512; wallCv.height = 512;
+      var wc = wallCv.getContext("2d");
+      wc.fillStyle = "#1a1520"; wc.fillRect(0, 0, 512, 512);
+      var bH = 40, bW = 90, mort = 4;
+      for (var row = 0; row < 14; row++) {
+        var off = (row % 2) * (bW / 2);
+        for (var col = -1; col < 7; col++) {
+          var bx = col*bW + off, by = row*bH, sh = 0.85 + Math.random()*0.15;
+          wc.fillStyle = "rgb(" + Math.floor(38*sh) + "," + Math.floor(30*sh) + "," + Math.floor(48*sh) + ")";
+          wc.fillRect(bx+mort, by+mort, bW-mort*2, bH-mort*2);
         }
-        // Dirt path near campfire
-        x.fillStyle = "rgba(160,118,55,0.55)"; x.beginPath(); x.ellipse(128, 185, 48, 88, 0, 0, Math.PI*2); x.fill();
-        return new T.CanvasTexture(cv);
-      })();
-      groundTex.wrapS = groundTex.wrapT = T.RepeatWrapping; groundTex.repeat.set(8, 8);
-      const ground = new T.Mesh(new T.PlaneGeometry(80, 80), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.82 }));
-      ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-
-      // Teepee tents — lighter natural tan in daylight
-      function makeTeepee(x, z, scale) {
-        const mat = new T.MeshStandardMaterial({ color: 0xc8a058, roughness: 0.78 });
-        const cone = new T.Mesh(new T.ConeGeometry(1.5*scale, 4.0*scale, 12), mat);
-        cone.position.set(x, 2.0*scale, z); cone.castShadow = true; scene.add(cone);
-        const poleMat = new T.MeshStandardMaterial({ color: 0x8c6030, roughness: 0.9 });
-        for (var i = 0; i < 5; i++) {
-          var a = (i/5)*Math.PI*2;
-          var pole = new T.Mesh(new T.CylinderGeometry(0.03*scale, 0.05*scale, 5.5*scale, 5), poleMat);
-          pole.position.set(x + Math.cos(a)*0.15*scale, 2.8*scale, z + Math.sin(a)*0.15*scale);
-          pole.rotation.z = Math.cos(a)*0.18; pole.rotation.x = Math.sin(a)*0.18; pole.castShadow = true; scene.add(pole);
-        }
-        var door = new T.Mesh(new T.PlaneGeometry(0.6*scale, 1.2*scale), new T.MeshStandardMaterial({ color: 0x4a2a06, roughness: 0.9, side: T.DoubleSide }));
-        door.position.set(x, 0.6*scale, z + 1.5*scale + 0.02); scene.add(door);
       }
-      makeTeepee(-5, -4, 1.2);
-      makeTeepee(5.5, -5, 0.9);
+      var wallTex = new T.CanvasTexture(wallCv); wallTex.wrapS = T.RepeatWrapping; wallTex.wrapT = T.RepeatWrapping; wallTex.repeat.set(3, 2);
+      var wallMat = new T.MeshStandardMaterial({ map: wallTex, roughness: 0.92, metalness: 0 });
+      var wDist = 22, wH = 14, wY = -5 + wH/2;
+      [[0, wDist, 50, wH, 0.5],[0, -wDist, 50, wH, 0.5],[wDist, 0, 0.5, wH, 50],[-wDist, 0, 0.5, wH, 50]].forEach(function(p) {
+        var wall = new T.Mesh(new T.BoxGeometry(p[2], p[3], p[4]), wallMat);
+        wall.position.set(p[0], wY, p[1]); wall.receiveShadow = true; scene.add(wall);
+      });
+      // Ceiling
+      var ceil = new T.Mesh(new T.PlaneGeometry(80, 80), new T.MeshStandardMaterial({ color: 0x120e1a, roughness: 1.0 }));
+      ceil.rotation.x = Math.PI/2; ceil.position.y = -5 + wH; scene.add(ceil);
 
-      // Campfire — still lit but dimmer in daylight
-      var campfireX = 0, campfireZ = -1;
-      var logMat = new T.MeshStandardMaterial({ color: 0x5a3010, roughness: 0.9 });
-      for (var i = 0; i < 4; i++) {
-        var la = (i/4)*Math.PI*2;
-        var log = new T.Mesh(new T.CylinderGeometry(0.06, 0.08, 0.9, 6), logMat);
-        log.position.set(campfireX + Math.cos(la)*0.22, 0.05, campfireZ + Math.sin(la)*0.22);
-        log.rotation.z = Math.cos(la)*0.5; log.rotation.x = Math.sin(la)*0.5; scene.add(log);
-      }
-      var fireMat = new T.MeshStandardMaterial({ color: 0xff8028, emissive: 0xff5010, emissiveIntensity: 0.9, roughness: 0.4 });
-      var fire = new T.Mesh(new T.SphereGeometry(0.22, 10, 8), fireMat);
-      fire.position.set(campfireX, 0.22, campfireZ); fire.scale.set(1, 1.4, 1); scene.add(fire);
-      var fireCore = new T.Mesh(new T.SphereGeometry(0.1, 8, 6), new T.MeshStandardMaterial({ color: "#fff5d0", emissive: "#fff5d0", emissiveIntensity: 1.6 }));
-      fireCore.position.set(campfireX, 0.22, campfireZ); scene.add(fireCore);
-      var fireLight = new T.PointLight(0xff7020, 1.2, 5); // much weaker in daylight
-      fireLight.position.set(campfireX, 0.5, campfireZ); scene.add(fireLight);
+      // Wall torches with flickering point lights
+      var torchMat = new T.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.88 });
+      var flameMat = new T.MeshStandardMaterial({ color: 0xff9030, emissive: 0xff5010, emissiveIntensity: 1.4, roughness: 0.5 });
+      var torchLights = [], torchFlames = [];
+      [[-wDist+0.6, 2.5, 0],[wDist-0.6, 2.5, 0],[0, 2.5, wDist-0.6],[0, 2.5, -wDist+0.6]].forEach(function(pos) {
+        var stick = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 0.5, 8), torchMat);
+        stick.position.set(pos[0], pos[1], pos[2]); scene.add(stick);
+        var flame = new T.Mesh(new T.SphereGeometry(0.14, 10, 10), flameMat);
+        flame.position.set(pos[0], pos[1]+0.32, pos[2]); flame.scale.set(1, 1.3, 1); scene.add(flame); torchFlames.push(flame);
+        var pl = new T.PointLight(0xff7020, 2.5, 22);
+        pl.position.set(pos[0], pos[1]+0.4, pos[2]); scene.add(pl); torchLights.push(pl);
+      });
 
-      // Pine trees — bright medium green in sunshine
-      function makeTree(x, z, hh) {
-        var trunk = new T.Mesh(new T.CylinderGeometry(0.1, 0.15, hh*0.3, 6), new T.MeshStandardMaterial({ color: 0x5c3a15, roughness: 0.9 }));
-        trunk.position.set(x, hh*0.15, z); trunk.castShadow = true; scene.add(trunk);
-        [1, 0.78, 0.58].forEach(function(t, ti) {
-          var canopy = new T.Mesh(new T.ConeGeometry(hh*0.28*t, hh*0.38, 7), new T.MeshStandardMaterial({ color: 0x2d7820, roughness: 0.85 }));
-          canopy.position.set(x, hh*(0.3 + ti*0.24), z); canopy.castShadow = true; scene.add(canopy);
-        });
-      }
-      [[-9,2,5],[9,3,5.5],[-11,-2,4.5],[11,-1,6],[-7,-6,5],[8,-5,4.5],[-13,4,6],[12,2,5.5],[-5,6,5],[6,6,4],[-9,-8,5.5],[10,-7,6],[0,7,5],[-15,-4,7],[14,-3,5]].forEach(function(t) { makeTree(t[0], t[1], t[2]); });
-
-      // Fluffy white clouds
-      function makeCloud(cx, cy, cz, scale) {
-        var mat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 1, transparent: true, opacity: 0.88 });
-        [[0,0,0,1],[1.2,0.1,0.5,0.72],[-0.9,0,0.4,0.68],[0.2,0.55,-0.2,0.62],[0.8,0.3,0.8,0.5]].forEach(function(p) {
-          var s = new T.Mesh(new T.SphereGeometry(scale*p[3], 10, 8), mat);
-          s.position.set(cx + p[0]*scale, cy + p[1]*scale, cz + p[2]*scale); scene.add(s);
-        });
-      }
-      makeCloud(-14, 10, -10, 2.2); makeCloud(12, 12, -14, 1.8); makeCloud(1, 11, -18, 2.0); makeCloud(-6, 9, -12, 1.4);
+      // A map stand/plinth on the floor beneath the tilted card
+      var plinthMat = new T.MeshStandardMaterial({ color: 0x3d2810, roughness: 0.85 });
+      var plinth = new T.Mesh(new T.BoxGeometry(3, 0.3, 2.2), plinthMat);
+      plinth.position.set(0, -5, 1); plinth.receiveShadow = true; plinth.castShadow = true; scene.add(plinth);
+      [[-1.1,-4.85,0.8],[1.1,-4.85,0.8],[-1.1,-4.85,-0.8],[1.1,-4.85,-0.8]].forEach(function(p) {
+        var leg = new T.Mesh(new T.BoxGeometry(0.2, 0.6, 0.2), plinthMat);
+        leg.position.set(p[0],p[1],p[2]); scene.add(leg);
+      });
 
       var raf, t = 0;
       function loop() {
         raf = requestAnimationFrame(loop);
         t += 0.004;
-        camera.position.x = Math.sin(t*0.3)*1.2;
-        camera.position.y = 4 + Math.sin(t*0.2)*0.3;
-        camera.lookAt(0, 1.5, 0);
-        fireLight.intensity = 1.0 + Math.sin(t*8)*0.2 + Math.sin(t*13)*0.1;
-        fire.scale.y = 1.3 + Math.sin(t*9)*0.09;
+        camera.position.x = Math.sin(t*0.22)*0.9;
+        camera.position.y = 7 + Math.sin(t*0.16)*0.25;
+        camera.lookAt(0, 0, 0);
+        torchLights.forEach(function(pl, i) { pl.intensity = 2.2 + Math.sin(t*8+i*1.5)*0.45 + Math.sin(t*13+i*2.3)*0.22; });
+        torchFlames.forEach(function(f, i) { f.scale.y = 1.3 + Math.sin(t*9+i*1.7)*0.13; });
         renderer.render(scene, camera);
       }
       loop();
@@ -592,17 +573,8 @@
 
   // World background canvas
   function WorldCanvas({ bgImg, is3d }) {
-    // Outdoor fantasy camp background — DAYTIME for 3D mode
-    const outdoorBg = [
-      "radial-gradient(circle at 35% 55%, rgba(255,210,100,0.15) 0%, transparent 25%)", // campfire warm glow
-      "radial-gradient(ellipse 80% 35% at 50% 98%, rgba(60,100,25,0.9) 0%, transparent 70%)", // bright grass ground
-      "radial-gradient(ellipse 12% 68% at 5% 62%, rgba(30,80,15,0.88) 0%, transparent 100%)",  // tree left
-      "radial-gradient(ellipse 10% 60% at 95% 56%, rgba(30,80,15,0.88) 0%, transparent 100%)", // tree right
-      "radial-gradient(ellipse 8% 50% at 15% 70%, rgba(25,70,12,0.8) 0%, transparent 100%)",   // tree mid-left
-      "radial-gradient(ellipse 7% 45% at 82% 68%, rgba(25,70,12,0.8) 0%, transparent 100%)",   // tree mid-right
-      "radial-gradient(ellipse 20% 20% at 50% 100%, rgba(140,100,45,0.55) 0%, transparent 100%)", // dirt path
-      "linear-gradient(180deg, #87ceeb 0%, #b8ddf8 30%, #c8e8a0 58%, #5a9830 80%, #3d6820 100%)", // sky to grass
-    ].join(", ");
+    // Map card background (same in 2D and 3D — the dungeon room is the surrounding scene)
+    const outdoorBg = "radial-gradient(60% 50% at 38% 64%, rgba(58,74,46,0.95), transparent 70%), radial-gradient(45% 42% at 64% 42%, rgba(74,66,44,0.9), transparent 72%), radial-gradient(120% 120% at 50% 50%, #16323a, #0b171c)";
     return React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 1,
       background: bgImg
         ? "url(" + bgImg + ") center/cover no-repeat"

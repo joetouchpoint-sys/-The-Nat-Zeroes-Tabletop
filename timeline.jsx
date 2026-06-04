@@ -74,10 +74,12 @@
     var expandState = useState(false); var expanded = expandState[0], setExpanded = expandState[1];
     var isFirst = props.isFirst;
     return React.createElement("div", { style: { display: "flex", alignItems: "flex-start", flex: "none" } },
-      // Gap connector (line between sessions)
-      !isFirst && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: 90, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
-        React.createElement("div", { style: { width: "100%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", flexShrink: 0 } }),
-        React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 8, zIndex: 2 } },
+      // Gap connector — always shown; first session gets a short lead-in cap, others get full connector with labels
+      React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: isFirst ? 40 : 90, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
+        React.createElement("div", { style: { width: "100%", height: 3, background: isFirst
+          ? "linear-gradient(90deg, transparent, var(--gold-deep))"
+          : "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", flexShrink: 0 } }),
+        !isFirst && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 8, zIndex: 2 } },
           gap && gap.time && React.createElement("div", { style: { fontSize: 10, fontFamily: "var(--mono)", color: DIM, background: "var(--bg-2)", border: "1px solid var(--hair)", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" } }, gap.time),
           gap && (gap.events || []).map(function(ev) { return React.createElement("div", { key: ev.id, style: { fontSize: 10, color: SOFT, background: "var(--surface)", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", maxWidth: 95, overflow: "hidden", textOverflow: "ellipsis" } }, "· " + ev.title); }),
           isDM && React.createElement("button", { onClick: onEditGap, title: "Edit gap/events", style: { background: "none", border: "none", cursor: "pointer", color: DIM, fontSize: 13, marginTop: 2, opacity: 0.7 } }, "✎"))),
