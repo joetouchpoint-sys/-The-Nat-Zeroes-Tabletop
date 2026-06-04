@@ -307,7 +307,7 @@
 
       // Modals
       React.createElement(RecapModal, { open: editR !== null, initial: editR || null, onClose: function() { setEditR(null); }, onSave: saveRecap }),
-      React.createElement(GapModal, { open: !!editG, initial: currentGap, onClose: function() { setEditG(null); }, onSave: function(gd) { saveGap(editG, gd); } })));
+      React.createElement(GapModal, { open: !!editG, initial: currentGap, onClose: function() { setEditG(null); }, onSave: function(gd) { saveGap(editG, gd); } }));
   }
 
   window.CampaignLog = CampaignLog;
