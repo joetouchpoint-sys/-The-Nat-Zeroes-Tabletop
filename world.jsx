@@ -33,6 +33,22 @@
 
   const PATH_COLORS = ["#e8b54a", "#4ea7e8", "#e8412e", "#4fb98a", "#9170f0", "#f4eddd"];
 
+  // Ramer-Douglas-Peucker path simplification for freehand drawing
+  function rdp(pts, eps) {
+    if (pts.length <= 2) return pts;
+    var max = 0, idx = 0;
+    var a = pts[0], b = pts[pts.length - 1];
+    for (var i = 1; i < pts.length - 1; i++) { var d = ptSegDist(pts[i], a, b); if (d > max) { max = d; idx = i; } }
+    if (max > eps) { var l = rdp(pts.slice(0, idx + 1), eps); var r = rdp(pts.slice(idx), eps); return l.slice(0, -1).concat(r); }
+    return [a, b];
+  }
+  function ptSegDist(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y;
+    if (dx === 0 && dy === 0) return Math.sqrt((p.x-a.x)**2 + (p.y-a.y)**2);
+    var t = Math.max(0, Math.min(1, ((p.x-a.x)*dx + (p.y-a.y)*dy) / (dx*dx + dy*dy)));
+    return Math.sqrt((p.x-(a.x+t*dx))**2 + (p.y-(a.y+t*dy))**2);
+  }
+
   function World({ locations: initLocs, maps, onOpenMap, bgImg, onBgImgChange, customPaths, setCustomPaths, worldMapName, setWorldMapName }) {
     const ctx = useContext(window.NZAuth.RoleContext);
     const canEdit = window.NZAuth.can(ctx.role, "editWorld");
@@ -50,6 +66,11 @@
     const [pathingFrom, setPathingFrom] = useState(null);
     const [pathColor, setPathColor] = useState("#e8b54a");
     const [drawingPath, setDrawingPath] = useState(false);
+    const [freehand, setFreehand] = useState(false);
+    const [previewPts, setPreviewPts] = useState(null);
+    const freehandActiveRef = useRef(false);
+    const freehandPtsRef = useRef([]);
+    freehandActiveRef.current = freehand;
     const waypointDragRef = useRef(null); // {pathId, idx, startX, startY, origX, origY, rectW, rectH}
     const segmentDragRef = useRef(null);  // {pathId, segIdx, startX, startY, rectW, rectH} — drag segment to add bend
     const bgInputRef = useRef(null);
@@ -74,18 +95,65 @@
       reader.readAsDataURL(file);
     }
 
-    // Mouse wheel zoom
+    // Mouse wheel zoom, pan (with clamping), and freehand path drawing
     useEffect(() => {
       const el = mapContainerRef.current;
       if (!el) return;
+
+      function screenToMapPct(ev, rect) {
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        if (is3d) {
+          const scale = zoom * 0.80;
+          return { x: Math.max(0, Math.min(100, (ev.clientX - cx - panX) / (rect.width * scale) * 100 + 50)),
+                   y: Math.max(0, Math.min(100, (ev.clientY - cy - panY) / (rect.height * scale) * 100 + 50)) };
+        }
+        return { x: Math.max(0, Math.min(100, (ev.clientX - cx) / (rect.width * zoom) * 100 + 50)),
+                 y: Math.max(0, Math.min(100, (ev.clientY - cy) / (rect.height * zoom) * 100 + 50)) };
+      }
+
       function onWheel(e) { e.preventDefault(); setZoom((z) => Math.max(0.4, Math.min(3, z - e.deltaY * 0.001))); }
-      el.addEventListener("wheel", onWheel, { passive: false });
-      // Pan drag on the outer container (in 3D mode, drag to pan when not on a pin)
+
+      function onFreehandMove(ev) {
+        const pts = freehandPtsRef.current;
+        if (!pts || pts.length === 0) return;
+        const rect = el.getBoundingClientRect();
+        const np = screenToMapPct(ev, rect);
+        const last = pts[pts.length - 1];
+        if (Math.sqrt((np.x - last.x)**2 + (np.y - last.y)**2) > 0.35) {
+          const newPts = pts.concat([np]);
+          freehandPtsRef.current = newPts;
+          setPreviewPts(newPts.slice());
+        }
+      }
+      function onFreehandUp() {
+        window.removeEventListener("pointermove", onFreehandMove);
+        window.removeEventListener("pointerup", onFreehandUp);
+        const pts = freehandPtsRef.current;
+        if (pts.length >= 4 && setCustomPaths) {
+          const simplified = rdp(pts, 1.2);
+          if (simplified.length >= 2) {
+            setCustomPaths((ps) => [...ps, { id: "p" + Date.now(), freehand: true, color: pathColor, points: simplified }]);
+          }
+        }
+        freehandPtsRef.current = [];
+        setPreviewPts(null);
+      }
+
       function onContainerPointerDown(ev) {
         if (ev.button !== 0) return;
         const t = ev.target;
         if (t.closest("button") || t.closest(".path-ctrl")) return;
         if (t.tagName === "circle" || t.tagName === "text" || t.tagName === "polyline" || t.tagName === "line") return;
+        // Freehand drawing takes priority over panning
+        if (freehandActiveRef.current && canEdit) {
+          const rect = el.getBoundingClientRect();
+          const pt = screenToMapPct(ev, rect);
+          freehandPtsRef.current = [pt];
+          setPreviewPts([pt]);
+          window.addEventListener("pointermove", onFreehandMove);
+          window.addEventListener("pointerup", onFreehandUp);
+          return;
+        }
         panDragRef.current = { startX: ev.clientX, startY: ev.clientY, origPanX: panX, origPanY: panY };
         window.addEventListener("pointermove", onContainerPointerMove);
         window.addEventListener("pointerup", onContainerPointerUp);
@@ -93,20 +161,23 @@
       function onContainerPointerMove(ev) {
         if (!panDragRef.current) return;
         const d = panDragRef.current;
-        setPanX(d.origPanX + (ev.clientX - d.startX));
-        setPanY(d.origPanY + (ev.clientY - d.startY));
+        const rect = el.getBoundingClientRect();
+        const maxX = rect.width * 0.42, maxY = rect.height * 0.42;
+        setPanX(Math.max(-maxX, Math.min(maxX, d.origPanX + (ev.clientX - d.startX))));
+        setPanY(Math.max(-maxY, Math.min(maxY, d.origPanY + (ev.clientY - d.startY))));
       }
       function onContainerPointerUp() {
         panDragRef.current = null;
         window.removeEventListener("pointermove", onContainerPointerMove);
         window.removeEventListener("pointerup", onContainerPointerUp);
       }
+      el.addEventListener("wheel", onWheel, { passive: false });
       el.addEventListener("pointerdown", onContainerPointerDown);
       return () => {
         el.removeEventListener("wheel", onWheel);
         el.removeEventListener("pointerdown", onContainerPointerDown);
       };
-    }, [panX, panY]); // include panX/panY so closures capture current values
+    }, [panX, panY, is3d, zoom, freehand, pathColor]);
 
     // Pin drag (adjust for zoom)
     function onPinPointerDown(e, loc) {
@@ -220,7 +291,8 @@
       // ===== Map stage =====
       // Outer container: shows "table" around the tilted map card in 3D
       React.createElement("div", { ref: mapContainerRef, style: { position: "relative", minWidth: 0, overflow: "hidden",
-        background: is3d ? "#040810" : "#0c1418" } },
+        background: is3d ? "#6ab0d8" : "#0c1418",
+        cursor: freehand ? "crosshair" : "default" } },
         // Three.js outdoor scene — flat, fills entire container behind the tilted map card
         is3d && React.createElement(WorldScene3D, null),
         // The map card — in 3D mode tilts as one unit (WorldCanvas + content together)
@@ -242,38 +314,45 @@
               if (!fromLoc) return null;
               return React.createElement("circle", { cx: fromLoc.x, cy: fromLoc.y, r: 2, fill: pathColor, opacity: 0.9, vectorEffect: "non-scaling-stroke" });
             })(),
-            // Custom paths — road-like double stroke, solid
+            // Custom paths — road-like double stroke; freehand paths use p.points, normal paths use from/to/waypoints
             paths.map((p) => {
-              const fromLoc = locs.find((l) => l.id === p.from);
-              const toLoc = locs.find((l) => l.id === p.to);
-              if (!fromLoc || !toLoc) return null;
-              const wps = p.waypoints || [];
-              const allPts = [[fromLoc.x, fromLoc.y], ...wps.map((w) => [w.x, w.y]), [toLoc.x, toLoc.y]];
+              var allPts;
+              if (p.freehand) {
+                allPts = (p.points || []).map((pt) => [pt.x, pt.y]);
+                if (allPts.length < 2) return null;
+              } else {
+                const fromLoc = locs.find((l) => l.id === p.from);
+                const toLoc = locs.find((l) => l.id === p.to);
+                if (!fromLoc || !toLoc) return null;
+                const wps = p.waypoints || [];
+                allPts = [[fromLoc.x, fromLoc.y], ...wps.map((w) => [w.x, w.y]), [toLoc.x, toLoc.y]];
+              }
               const midIdx = Math.floor(allPts.length / 2);
               const [mx, my] = allPts[midIdx];
               const col = p.color || "#c4a060";
               const ptStr = allPts.map(([x, y]) => x + " " + y).join(" ");
+              const wps = p.freehand ? [] : (p.waypoints || []);
               return React.createElement(React.Fragment, { key: p.id },
-                // Invisible wider hit area for hovering
                 canEdit && React.createElement("polyline", { points: ptStr, fill: "none", stroke: "transparent", strokeWidth: 4, style: { cursor: "pointer" },
                   onMouseEnter: () => setHoveredPath(p.id), onMouseLeave: () => setHoveredPath(null) }),
-                // Dark outline (road edge) — thicker for visibility
                 React.createElement("polyline", { points: ptStr, fill: "none", stroke: "#160a00", strokeWidth: 3.5, strokeLinejoin: "round", vectorEffect: "non-scaling-stroke",
                   onMouseEnter: canEdit ? () => setHoveredPath(p.id) : undefined, onMouseLeave: canEdit ? () => setHoveredPath(null) : undefined }),
-                // Light fill (road surface — earthy tan)
                 React.createElement("polyline", { points: ptStr, fill: "none", stroke: col, strokeWidth: 1.8, strokeLinejoin: "round", vectorEffect: "non-scaling-stroke" }),
-                // Delete × — ONLY when hovering this path
                 canEdit && hoveredPath === p.id && React.createElement("circle", { cx: mx, cy: my, r: 2.4, fill: "rgba(20,14,28,0.95)", stroke: col, strokeWidth: 0.5, style: { cursor: "pointer" }, onClick: (e) => { e.stopPropagation(); deletePath(p.id); } }),
                 canEdit && hoveredPath === p.id && React.createElement("text", { x: mx, y: my + 0.4, textAnchor: "middle", dominantBaseline: "middle", fontSize: 3.0, fill: "#fff", style: { cursor: "pointer", userSelect: "none" }, onClick: (e) => { e.stopPropagation(); deletePath(p.id); } }, "×"),
-                // Segment bend handles — ONLY when hovering this path
-                canEdit && hoveredPath === p.id && allPts.slice(0, -1).map(([ax, ay], si) => {
+                // Bend/waypoint handles only on non-freehand paths
+                !p.freehand && canEdit && hoveredPath === p.id && allPts.slice(0, -1).map(([ax, ay], si) => {
                   const [bx, by] = allPts[si + 1];
                   const smx = (ax + bx) / 2, smy = (ay + by) / 2;
                   return React.createElement("circle", { key: "s" + si, cx: smx, cy: smy, r: 0.7, fill: col, stroke: "rgba(255,255,255,0.6)", strokeWidth: 0.25, style: { cursor: "grab" }, onPointerDown: (e) => { e.stopPropagation(); onSegmentPointerDown(e, p.id, si, smx, smy); } });
                 }),
-                // Waypoint handles — ONLY when hovering this path
-                canEdit && hoveredPath === p.id && wps.map((wp, i) => React.createElement("circle", { key: "w" + i, cx: wp.x, cy: wp.y, r: 1.1, fill: col, stroke: "#fff", strokeWidth: 0.35, style: { cursor: "grab" }, onPointerDown: (e) => { e.stopPropagation(); onWaypointPointerDown(e, p.id, i); } })));
-            }).filter(Boolean)),
+                !p.freehand && canEdit && hoveredPath === p.id && wps.map((wp, i) => React.createElement("circle", { key: "w" + i, cx: wp.x, cy: wp.y, r: 1.1, fill: col, stroke: "#fff", strokeWidth: 0.35, style: { cursor: "grab" }, onPointerDown: (e) => { e.stopPropagation(); onWaypointPointerDown(e, p.id, i); } })));
+            }).filter(Boolean),
+            // Live preview while freehand drawing
+            previewPts && previewPts.length >= 2 && React.createElement("polyline", {
+              points: previewPts.map((pt) => pt.x + " " + pt.y).join(" "),
+              fill: "none", stroke: pathColor, strokeWidth: 1.5, strokeDasharray: "2 1.2",
+              vectorEffect: "non-scaling-stroke", opacity: 0.8, pointerEvents: "none" })),
           // Parchment border overlay
           React.createElement(ParchmentBorder, null),
           // Pins
@@ -313,12 +392,17 @@
               React.createElement(Icon, { name: "x", size: 13 }), "Clear bg"),
             React.createElement("button", { className: "btn sm ghost", onClick: () => bgInputRef.current.click() },
               React.createElement(Icon, { name: "upload", size: 14 }), "Map image"),
-            // Path drawing mode
+            // Pin-to-pin path drawing
             React.createElement("button", { className: "btn sm" + (drawingPath ? " primary" : " ghost"),
-              title: drawingPath ? "Click first pin, then click second pin to draw path. After creating, drag midpoint dots on the path to bend it." : "Draw a path between locations",
-              onClick: () => { setDrawingPath((x) => !x); setPathingFrom(null); } },
+              title: drawingPath ? "Click first pin then second pin to draw path. Drag midpoint dots to bend it." : "Draw a path between two location pins",
+              onClick: () => { setDrawingPath((x) => !x); setPathingFrom(null); if (!drawingPath) setFreehand(false); } },
               "〜 " + (drawingPath ? (pathingFrom ? "click end pin…" : "click start pin…") : "Draw path")),
-            drawingPath && React.createElement("div", { style: { display: "flex", gap: 4 } },
+            // Freehand path drawing
+            React.createElement("button", { className: "btn sm" + (freehand ? " primary" : " ghost"),
+              title: freehand ? "Click and drag to sketch a path — release to smooth it" : "Sketch a freehand path anywhere on the map",
+              onClick: () => { setFreehand((x) => !x); if (!freehand) { setDrawingPath(false); setPathingFrom(null); } } },
+              "✏ " + (freehand ? "Sketching…" : "Freehand")),
+            (drawingPath || freehand) && React.createElement("div", { style: { display: "flex", gap: 4 } },
               PATH_COLORS.map((c) => React.createElement("button", { key: c, onClick: () => setPathColor(c),
                 style: { width: 18, height: 18, borderRadius: "50%", background: c, border: "2px solid " + (pathColor === c ? "#fff" : "transparent"), cursor: "pointer" } }))),
             React.createElement("button", { className: "btn sm primary", onClick: () => setAddOpen(true) },
@@ -385,7 +469,7 @@
       } })));
   }
 
-  // Three.js outdoor forest camp scene (shows BEHIND the tilted map card in 3D mode)
+  // Three.js outdoor forest camp scene — DAYTIME (shows BEHIND the tilted map card in 3D mode)
   function WorldScene3D() {
     const mountRef = useRef(null);
     useEffect(function() {
@@ -393,102 +477,109 @@
       const cont = mountRef.current;
       const w = cont.clientWidth, h = cont.clientHeight;
       const scene = new T.Scene();
-      scene.fog = new T.FogExp2(0x040810, 0.022);
+      scene.fog = new T.Fog(0x87ceeb, 40, 130);
       const renderer = new T.WebGLRenderer({ antialias: true });
       renderer.setSize(w, h); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
-      renderer.setClearColor(0x040810, 1);
+      renderer.setClearColor(0x87ceeb, 1); // daytime sky blue
       renderer.shadowMap.enabled = true;
       cont.appendChild(renderer.domElement);
       const camera = new T.PerspectiveCamera(50, w / h, 0.1, 200);
       camera.position.set(0, 4, 12); camera.lookAt(0, 1.5, 0);
 
-      // Lighting — night atmosphere
-      scene.add(new T.HemisphereLight(0x080a08, 0x000400, 0.5));
-      const moon = new T.DirectionalLight(0x8090c0, 0.6); moon.position.set(-8, 12, 6); scene.add(moon);
+      // Lighting — bright daytime
+      scene.add(new T.HemisphereLight(0x87ceeb, 0x5a9a30, 1.3)); // sky blue top, grass green bottom
+      const sun = new T.DirectionalLight(0xfff8e0, 2.0); sun.position.set(10, 20, 8); sun.castShadow = true; scene.add(sun);
+      scene.add(new T.AmbientLight(0xb8d8f8, 0.5)); // soft blue sky fill
 
-      // Ground
+      // Visible sun sphere in sky
+      var sunSphere = new T.Mesh(new T.SphereGeometry(1.8, 16, 12), new T.MeshBasicMaterial({ color: 0xffee88 }));
+      sunSphere.position.set(20, 24, -22); scene.add(sunSphere);
+      var sunGlow = new T.Mesh(new T.SphereGeometry(3.2, 16, 12), new T.MeshBasicMaterial({ color: 0xfffbcc, transparent: true, opacity: 0.22 }));
+      sunGlow.position.copy(sunSphere.position); scene.add(sunGlow);
+
+      // Ground — bright grassy terrain
       const groundTex = (function() {
         const cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
         const x = cv.getContext("2d");
-        x.fillStyle = "#0d1208"; x.fillRect(0, 0, 256, 256);
-        for (var i = 0; i < 400; i++) { x.fillStyle = "rgba(" + (10+Math.random()*10) + "," + (18+Math.random()*12) + ",5,0.5)"; x.beginPath(); x.arc(Math.random()*256, Math.random()*256, 2+Math.random()*5, 0, 7); x.fill(); }
+        x.fillStyle = "#4e8a2e"; x.fillRect(0, 0, 256, 256);
+        for (var i = 0; i < 600; i++) {
+          var r = 40 + Math.floor(Math.random()*30), g = 90 + Math.floor(Math.random()*55), b = 15 + Math.floor(Math.random()*20);
+          x.fillStyle = "rgba(" + r + "," + g + "," + b + ",0.55)";
+          x.beginPath(); x.arc(Math.random()*256, Math.random()*256, 1 + Math.random()*7, 0, 7); x.fill();
+        }
+        // Dirt path near campfire
+        x.fillStyle = "rgba(160,118,55,0.55)"; x.beginPath(); x.ellipse(128, 185, 48, 88, 0, 0, Math.PI*2); x.fill();
         return new T.CanvasTexture(cv);
       })();
       groundTex.wrapS = groundTex.wrapT = T.RepeatWrapping; groundTex.repeat.set(8, 8);
-      const ground = new T.Mesh(new T.PlaneGeometry(80, 80), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.95 }));
+      const ground = new T.Mesh(new T.PlaneGeometry(80, 80), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.82 }));
       ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
-      // Teepee tent
+      // Teepee tents — lighter natural tan in daylight
       function makeTeepee(x, z, scale) {
-        const mat = new T.MeshStandardMaterial({ color: 0x8a6030, roughness: 0.85 });
-        const cone = new T.Mesh(new T.ConeGeometry(1.5 * scale, 4.0 * scale, 12), mat);
-        cone.position.set(x, 2.0 * scale, z); scene.add(cone);
-        // Poles sticking out top
-        const poleMat = new T.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.9 });
+        const mat = new T.MeshStandardMaterial({ color: 0xc8a058, roughness: 0.78 });
+        const cone = new T.Mesh(new T.ConeGeometry(1.5*scale, 4.0*scale, 12), mat);
+        cone.position.set(x, 2.0*scale, z); cone.castShadow = true; scene.add(cone);
+        const poleMat = new T.MeshStandardMaterial({ color: 0x8c6030, roughness: 0.9 });
         for (var i = 0; i < 5; i++) {
-          var a = (i / 5) * Math.PI * 2;
+          var a = (i/5)*Math.PI*2;
           var pole = new T.Mesh(new T.CylinderGeometry(0.03*scale, 0.05*scale, 5.5*scale, 5), poleMat);
           pole.position.set(x + Math.cos(a)*0.15*scale, 2.8*scale, z + Math.sin(a)*0.15*scale);
-          pole.rotation.z = Math.cos(a) * 0.18; pole.rotation.x = Math.sin(a) * 0.18;
-          scene.add(pole);
+          pole.rotation.z = Math.cos(a)*0.18; pole.rotation.x = Math.sin(a)*0.18; pole.castShadow = true; scene.add(pole);
         }
-        // Entrance (darker patch on front)
-        var door = new T.Mesh(new T.PlaneGeometry(0.6*scale, 1.2*scale), new T.MeshStandardMaterial({ color: 0x2a1a06, roughness: 0.9, side: T.DoubleSide }));
+        var door = new T.Mesh(new T.PlaneGeometry(0.6*scale, 1.2*scale), new T.MeshStandardMaterial({ color: 0x4a2a06, roughness: 0.9, side: T.DoubleSide }));
         door.position.set(x, 0.6*scale, z + 1.5*scale + 0.02); scene.add(door);
       }
       makeTeepee(-5, -4, 1.2);
       makeTeepee(5.5, -5, 0.9);
 
-      // Campfire
+      // Campfire — still lit but dimmer in daylight
       var campfireX = 0, campfireZ = -1;
-      var logMat = new T.MeshStandardMaterial({ color: 0x4a2a0a, roughness: 0.9 });
+      var logMat = new T.MeshStandardMaterial({ color: 0x5a3010, roughness: 0.9 });
       for (var i = 0; i < 4; i++) {
-        var la = (i / 4) * Math.PI * 2;
+        var la = (i/4)*Math.PI*2;
         var log = new T.Mesh(new T.CylinderGeometry(0.06, 0.08, 0.9, 6), logMat);
         log.position.set(campfireX + Math.cos(la)*0.22, 0.05, campfireZ + Math.sin(la)*0.22);
-        log.rotation.z = Math.cos(la) * 0.5; log.rotation.x = Math.sin(la) * 0.5;
-        scene.add(log);
+        log.rotation.z = Math.cos(la)*0.5; log.rotation.x = Math.sin(la)*0.5; scene.add(log);
       }
-      var fireMat = new T.MeshStandardMaterial({ color: 0xff7020, emissive: 0xff4400, emissiveIntensity: 1.2, roughness: 0.4 });
+      var fireMat = new T.MeshStandardMaterial({ color: 0xff8028, emissive: 0xff5010, emissiveIntensity: 0.9, roughness: 0.4 });
       var fire = new T.Mesh(new T.SphereGeometry(0.22, 10, 8), fireMat);
       fire.position.set(campfireX, 0.22, campfireZ); fire.scale.set(1, 1.4, 1); scene.add(fire);
-      var fireCore = new T.Mesh(new T.SphereGeometry(0.1, 8, 6), new T.MeshStandardMaterial({ color: "#fff8e0", emissive: "#fff8e0", emissiveIntensity: 2.5 }));
+      var fireCore = new T.Mesh(new T.SphereGeometry(0.1, 8, 6), new T.MeshStandardMaterial({ color: "#fff5d0", emissive: "#fff5d0", emissiveIntensity: 1.6 }));
       fireCore.position.set(campfireX, 0.22, campfireZ); scene.add(fireCore);
-      var fireLight = new T.PointLight(0xff6010, 3.0, 12); fireLight.position.set(campfireX, 0.5, campfireZ); scene.add(fireLight);
+      var fireLight = new T.PointLight(0xff7020, 1.2, 5); // much weaker in daylight
+      fireLight.position.set(campfireX, 0.5, campfireZ); scene.add(fireLight);
 
-      // Pine trees
-      function makeTree(x, z, h) {
-        var trunk = new T.Mesh(new T.CylinderGeometry(0.1, 0.15, h*0.3, 6), new T.MeshStandardMaterial({ color: 0x2a1a0a, roughness: 0.9 }));
-        trunk.position.set(x, h*0.15, z); scene.add(trunk);
-        var tiers = [1, 0.78, 0.58];
-        tiers.forEach(function(t, ti) {
-          var canopy = new T.Mesh(new T.ConeGeometry(h*0.28*t, h*0.38, 7), new T.MeshStandardMaterial({ color: 0x081206, roughness: 0.92 }));
-          canopy.position.set(x, h*(0.3 + ti*0.24), z); scene.add(canopy);
+      // Pine trees — bright medium green in sunshine
+      function makeTree(x, z, hh) {
+        var trunk = new T.Mesh(new T.CylinderGeometry(0.1, 0.15, hh*0.3, 6), new T.MeshStandardMaterial({ color: 0x5c3a15, roughness: 0.9 }));
+        trunk.position.set(x, hh*0.15, z); trunk.castShadow = true; scene.add(trunk);
+        [1, 0.78, 0.58].forEach(function(t, ti) {
+          var canopy = new T.Mesh(new T.ConeGeometry(hh*0.28*t, hh*0.38, 7), new T.MeshStandardMaterial({ color: 0x2d7820, roughness: 0.85 }));
+          canopy.position.set(x, hh*(0.3 + ti*0.24), z); canopy.castShadow = true; scene.add(canopy);
         });
       }
       [[-9,2,5],[9,3,5.5],[-11,-2,4.5],[11,-1,6],[-7,-6,5],[8,-5,4.5],[-13,4,6],[12,2,5.5],[-5,6,5],[6,6,4],[-9,-8,5.5],[10,-7,6],[0,7,5],[-15,-4,7],[14,-3,5]].forEach(function(t) { makeTree(t[0], t[1], t[2]); });
 
-      // Stars
-      var starGeo = new T.BufferGeometry();
-      var starPts = [];
-      for (var i = 0; i < 200; i++) {
-        var phi = Math.random() * Math.PI * 2, theta = Math.random() * Math.PI * 0.5;
-        starPts.push(Math.sin(theta)*Math.cos(phi)*50, Math.cos(theta)*50 + 10, Math.sin(theta)*Math.sin(phi)*50);
+      // Fluffy white clouds
+      function makeCloud(cx, cy, cz, scale) {
+        var mat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 1, transparent: true, opacity: 0.88 });
+        [[0,0,0,1],[1.2,0.1,0.5,0.72],[-0.9,0,0.4,0.68],[0.2,0.55,-0.2,0.62],[0.8,0.3,0.8,0.5]].forEach(function(p) {
+          var s = new T.Mesh(new T.SphereGeometry(scale*p[3], 10, 8), mat);
+          s.position.set(cx + p[0]*scale, cy + p[1]*scale, cz + p[2]*scale); scene.add(s);
+        });
       }
-      starGeo.setAttribute("position", new T.Float32BufferAttribute(starPts, 3));
-      scene.add(new T.Points(starGeo, new T.PointsMaterial({ color: 0xffffff, size: 0.3 })));
+      makeCloud(-14, 10, -10, 2.2); makeCloud(12, 12, -14, 1.8); makeCloud(1, 11, -18, 2.0); makeCloud(-6, 9, -12, 1.4);
 
       var raf, t = 0;
       function loop() {
         raf = requestAnimationFrame(loop);
         t += 0.004;
-        // Gentle camera sway
-        camera.position.x = Math.sin(t * 0.3) * 1.2;
-        camera.position.y = 4 + Math.sin(t * 0.2) * 0.3;
+        camera.position.x = Math.sin(t*0.3)*1.2;
+        camera.position.y = 4 + Math.sin(t*0.2)*0.3;
         camera.lookAt(0, 1.5, 0);
-        // Flickering fire
-        fireLight.intensity = 2.6 + Math.sin(t * 8) * 0.5 + Math.sin(t * 13) * 0.3;
-        fire.scale.y = 1.3 + Math.sin(t * 9) * 0.12;
+        fireLight.intensity = 1.0 + Math.sin(t*8)*0.2 + Math.sin(t*13)*0.1;
+        fire.scale.y = 1.3 + Math.sin(t*9)*0.09;
         renderer.render(scene, camera);
       }
       loop();
@@ -501,16 +592,16 @@
 
   // World background canvas
   function WorldCanvas({ bgImg, is3d }) {
-    // Outdoor fantasy camp background for 3D mode
+    // Outdoor fantasy camp background — DAYTIME for 3D mode
     const outdoorBg = [
-      "radial-gradient(circle at 50% 90%, rgba(180,90,20,0.55) 0%, transparent 35%)", // campfire glow on ground
-      "radial-gradient(ellipse 80% 40% at 50% 95%, rgba(100,55,10,0.5) 0%, transparent 60%)", // ground
-      "radial-gradient(ellipse 12% 70% at 5% 60%, rgba(20,50,10,0.9) 0%, transparent 100%)",  // tree left
-      "radial-gradient(ellipse 10% 60% at 95% 55%, rgba(20,50,10,0.9) 0%, transparent 100%)", // tree right
-      "radial-gradient(ellipse 8% 50% at 15% 70%, rgba(15,40,8,0.85) 0%, transparent 100%)",  // tree mid-left
-      "radial-gradient(ellipse 7% 45% at 82% 68%, rgba(15,40,8,0.85) 0%, transparent 100%)",  // tree mid-right
-      "radial-gradient(ellipse 20% 25% at 50% 100%, rgba(80,45,10,0.6) 0%, transparent 100%)", // path/earth
-      "linear-gradient(180deg, #06080a 0%, #0a1008 25%, #0d1a0a 50%, #142808 75%, #1a3010 100%)", // sky+forest
+      "radial-gradient(circle at 35% 55%, rgba(255,210,100,0.15) 0%, transparent 25%)", // campfire warm glow
+      "radial-gradient(ellipse 80% 35% at 50% 98%, rgba(60,100,25,0.9) 0%, transparent 70%)", // bright grass ground
+      "radial-gradient(ellipse 12% 68% at 5% 62%, rgba(30,80,15,0.88) 0%, transparent 100%)",  // tree left
+      "radial-gradient(ellipse 10% 60% at 95% 56%, rgba(30,80,15,0.88) 0%, transparent 100%)", // tree right
+      "radial-gradient(ellipse 8% 50% at 15% 70%, rgba(25,70,12,0.8) 0%, transparent 100%)",   // tree mid-left
+      "radial-gradient(ellipse 7% 45% at 82% 68%, rgba(25,70,12,0.8) 0%, transparent 100%)",   // tree mid-right
+      "radial-gradient(ellipse 20% 20% at 50% 100%, rgba(140,100,45,0.55) 0%, transparent 100%)", // dirt path
+      "linear-gradient(180deg, #87ceeb 0%, #b8ddf8 30%, #c8e8a0 58%, #5a9830 80%, #3d6820 100%)", // sky to grass
     ].join(", ");
     return React.createElement("div", { style: { position: "absolute", inset: 0, zIndex: 1,
       background: bgImg

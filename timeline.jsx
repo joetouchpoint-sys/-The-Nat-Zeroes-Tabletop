@@ -64,43 +64,52 @@
   }
 
   // ── SessionNode (individual session on the timeline) ─────────────────────
+  var CIRCLE = 52; // circle diameter
+  var PAD_TOP = 68; // space above circle — keeps circle visually centred on the line
+
   function SessionNode(props) {
     var recap = props.recap, num = props.num, isDM = props.isDM;
     var onEdit = props.onEdit, onDelete = props.onDelete, onEditGap = props.onEditGap;
-    var gap = props.gap; // { time, events } for gap BEFORE this session
+    var gap = props.gap;
     var expandState = useState(false); var expanded = expandState[0], setExpanded = expandState[1];
     var isFirst = props.isFirst;
-    return React.createElement("div", { style: { display: "flex", alignItems: "stretch", flex: "none" } },
-      // Gap connector (between sessions)
-      !isFirst && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: 80, paddingTop: 28 } },
-        // Timeline line segment
-        React.createElement("div", { style: { width: "100%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", position: "relative", top: 22 } }),
-        // Gap label + events below the line
-        React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 8, zIndex: 2 } },
-          gap && gap.time && React.createElement("div", { style: { fontSize: 10, fontFamily: "var(--mono)", color: DIM, background: "var(--bg-2)", border: "1px solid var(--hair)", borderRadius: 100, padding: "2px 8px", whiteSpace: "nowrap" } }, gap.time),
-          gap && (gap.events || []).map(function(ev) { return React.createElement("div", { key: ev.id, style: { fontSize: 10, color: SOFT, background: "var(--surface)", borderRadius: 5, padding: "2px 6px", whiteSpace: "nowrap", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis" } }, "· " + ev.title); }),
-          isDM && React.createElement("button", { onClick: onEditGap, title: "Edit gap/events", style: { background: "none", border: "none", cursor: "pointer", color: DIM, fontSize: 12, marginTop: 2 } }, "✎"))),
+    return React.createElement("div", { style: { display: "flex", alignItems: "flex-start", flex: "none" } },
+      // Gap connector (line between sessions)
+      !isFirst && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: 90, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
+        React.createElement("div", { style: { width: "100%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", flexShrink: 0 } }),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 8, zIndex: 2 } },
+          gap && gap.time && React.createElement("div", { style: { fontSize: 10, fontFamily: "var(--mono)", color: DIM, background: "var(--bg-2)", border: "1px solid var(--hair)", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" } }, gap.time),
+          gap && (gap.events || []).map(function(ev) { return React.createElement("div", { key: ev.id, style: { fontSize: 10, color: SOFT, background: "var(--surface)", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", maxWidth: 95, overflow: "hidden", textOverflow: "ellipsis" } }, "· " + ev.title); }),
+          isDM && React.createElement("button", { onClick: onEditGap, title: "Edit gap/events", style: { background: "none", border: "none", cursor: "pointer", color: DIM, fontSize: 13, marginTop: 2, opacity: 0.7 } }, "✎"))),
       // Session node
-      React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 200, flex: "none" } },
-        // Circle marker on the timeline line
-        React.createElement("div", { style: { position: "relative", zIndex: 2, marginTop: isFirst ? 18 : 18 } },
+      React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 220, flex: "none", paddingTop: PAD_TOP } },
+        // Circle
+        React.createElement("div", { style: { position: "relative", zIndex: 2 } },
           React.createElement("button", { onClick: function() { setExpanded(function(x) { return !x; }); },
-            style: { width: 44, height: 44, borderRadius: "50%", border: "3px solid var(--gold)", background: "radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold-deep))", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: expanded ? "0 0 0 4px rgba(232,181,74,0.35), 0 4px 14px rgba(0,0,0,0.4)" : "0 4px 14px rgba(0,0,0,0.4)",
-              fontFamily: "var(--display)", fontWeight: 900, fontSize: 15, color: "#2a1d05" } },
+            style: { width: CIRCLE, height: CIRCLE, borderRadius: "50%",
+              border: "3px solid var(--gold)",
+              background: expanded
+                ? "radial-gradient(circle at 32% 28%, var(--gold-bright), #b8820a)"
+                : "radial-gradient(circle at 32% 28%, var(--gold-bright), var(--gold-deep))",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: expanded
+                ? "0 0 0 6px rgba(232,181,74,0.28), 0 0 0 10px rgba(232,181,74,0.1), 0 8px 24px rgba(0,0,0,0.5)"
+                : "0 0 0 3px rgba(232,181,74,0.18), 0 6px 20px rgba(0,0,0,0.38)",
+              fontFamily: "var(--display)", fontWeight: 900, fontSize: 17, color: "#2a1d05",
+              transition: "box-shadow 0.2s ease, background 0.2s ease" } },
             num),
-          // Edit/delete hover controls for DM
-          isDM && React.createElement("div", { style: { position: "absolute", top: -8, right: -8, display: "flex", gap: 2 } },
-            React.createElement("button", { onClick: onEdit, style: { width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--hair)", background: "var(--surface-2)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", color: DIM } }, "✏"),
-            React.createElement("button", { onClick: onDelete, style: { width: 20, height: 20, borderRadius: "50%", border: "1px solid var(--hair)", background: "var(--surface-2)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--red-bright)" } }, "✕"))),
-        // Session info below marker
-        React.createElement("div", { style: { padding: "10px 8px 0", textAlign: "center" } },
-          React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 700, fontSize: 14, color: GOLD2, lineHeight: 1.2, marginBottom: 4, cursor: "pointer" }, onClick: function() { setExpanded(function(x) { return !x; }); } }, recap.title || "Untitled"),
-          recap.date && React.createElement("div", { style: { fontSize: 11, color: DIM, marginBottom: 4 } }, recap.date),
+          isDM && React.createElement("div", { style: { position: "absolute", top: -10, right: -10, display: "flex", gap: 3 } },
+            React.createElement("button", { onClick: onEdit, title: "Edit session", style: { width: 22, height: 22, borderRadius: "50%", border: "1px solid var(--hair)", background: "var(--surface-2)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", color: DIM, boxShadow: "0 2px 6px rgba(0,0,0,0.3)" } }, "✏"),
+            React.createElement("button", { onClick: onDelete, title: "Delete session", style: { width: 22, height: 22, borderRadius: "50%", border: "1px solid var(--hair)", background: "var(--surface-2)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--red-bright)", boxShadow: "0 2px 6px rgba(0,0,0,0.3)" } }, "✕"))),
+        // Session info below circle
+        React.createElement("div", { style: { padding: "13px 8px 0", textAlign: "center", width: "100%" } },
+          React.createElement("div", { style: { fontFamily: "var(--display)", fontWeight: 700, fontSize: 14.5, color: GOLD2, lineHeight: 1.22, marginBottom: 5, cursor: "pointer" },
+            onClick: function() { setExpanded(function(x) { return !x; }); } }, recap.title || "Untitled"),
+          recap.date && React.createElement("div", { style: { fontSize: 11, color: DIM, marginBottom: 6, fontFamily: "var(--mono)" } }, recap.date),
           React.createElement("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "center" } },
-            (recap.tags || []).slice(0, 2).map(function(t) { return React.createElement("span", { key: t, style: { fontSize: 9, background: "rgba(232,181,74,0.12)", border: "1px solid rgba(232,181,74,0.25)", borderRadius: 100, padding: "1px 6px", color: "var(--gold-deep)", whiteSpace: "nowrap" } }, t); }))),
+            (recap.tags || []).slice(0, 2).map(function(t) { return React.createElement("span", { key: t, style: { fontSize: 10, background: "rgba(232,181,74,0.14)", border: "1px solid rgba(232,181,74,0.3)", borderRadius: 100, padding: "2px 7px", color: "var(--gold-deep)", whiteSpace: "nowrap" } }, t); }))),
         // Expanded recap body
-        expanded && recap.body && React.createElement("div", { style: { margin: "10px 8px 0", padding: 12, background: "var(--surface)", borderRadius: 10, fontSize: 12.5, color: SOFT, lineHeight: 1.6, textAlign: "left", maxWidth: 190, border: "1px solid var(--hair)" } }, recap.body)));
+        expanded && recap.body && React.createElement("div", { style: { margin: "12px 8px 0", padding: 14, background: "var(--surface)", borderRadius: 12, fontSize: 13, color: SOFT, lineHeight: 1.65, textAlign: "left", maxWidth: 200, border: "1px solid var(--hair)", boxShadow: "0 4px 16px rgba(0,0,0,0.28)" } }, recap.body)));
   }
 
   // ── Main CampaignLog component ────────────────────────────────────────────
@@ -165,28 +174,33 @@
             React.createElement("span", { className: "muted", style: { fontSize: 11 } }, item[0]));
         })),
 
-      // Horizontal timeline scroll
-      React.createElement("div", { style: { flex: 1, overflowX: "auto", overflowY: "auto", padding: "24px 24px 40px", minHeight: 0 } },
+      // Timeline scroll area — vertically centred
+      React.createElement("div", { style: { flex: 1, overflowX: "auto", overflowY: "auto", minHeight: 0,
+        background: "linear-gradient(180deg, var(--bg) 0%, rgba(232,181,74,0.03) 50%, var(--bg) 100%)" } },
         sorted.length === 0
-          ? React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, gap: 14 } },
+          ? React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 220, gap: 14 } },
               React.createElement(Icon, { name: "recap", size: 40, style: { color: DIM } }),
               React.createElement("div", { className: "muted", style: { fontStyle: "italic" } }, "No sessions logged yet."),
               canEdit && React.createElement("button", { className: "btn primary", onClick: function() { setEditR(false); } }, React.createElement(Icon, { name: "plus", size: 15 }), "Add first session"))
-          : React.createElement("div", { style: { display: "flex", alignItems: "flex-start", minWidth: "max-content", paddingBottom: 24 } },
-              // Continuous background timeline line
-              React.createElement("div", { style: { position: "absolute", height: 3, background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", top: 0, left: 0, right: 0, marginTop: 44, pointerEvents: "none" } }),
-              sorted.map(function(recap, i) {
-                return React.createElement(SessionNode, { key: recap.id, recap: recap, num: recap.num || (i + 1), isDM: isDM,
-                  gap: getGap(recap.id), isFirst: i === 0,
-                  onEdit: function() { setEditR(recap); },
-                  onDelete: function() { deleteRecap(recap.id); },
-                  onEditGap: function() { setEditG(recap.id); } });
-              }),
-              // "Add session" button at the end of timeline
-              canEdit && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 100, paddingTop: 18, flex: "none" } },
-                React.createElement("div", { style: { width: "50%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), transparent)" } }),
-                React.createElement("button", { onClick: function() { setEditR(false); },
-                  style: { width: 36, height: 36, borderRadius: "50%", border: "2px dashed var(--gold-deep)", background: "var(--bg-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gold-deep)", fontSize: 22, marginTop: 4 } }, "+"))),
+          // Centering wrapper — makes the timeline row sit in the vertical middle of the scroll area
+          : React.createElement("div", { style: { display: "flex", alignItems: "center", minHeight: "100%", minWidth: "max-content", padding: "32px 48px" } },
+              React.createElement("div", { style: { display: "flex", alignItems: "flex-start", minWidth: "max-content", position: "relative" } },
+                // Continuous gold line — positioned at circle centre (PAD_TOP + half circle)
+                React.createElement("div", { style: { position: "absolute", height: 3, top: PAD_TOP + CIRCLE/2 - 1,
+                  left: 0, right: 0, pointerEvents: "none", zIndex: 0,
+                  background: "linear-gradient(90deg, transparent 0%, var(--gold-deep) 2%, var(--gold-bright) 20%, var(--gold-bright) 80%, var(--gold-deep) 98%, transparent 100%)" } }),
+                sorted.map(function(recap, i) {
+                  return React.createElement(SessionNode, { key: recap.id, recap: recap, num: recap.num || (i + 1), isDM: isDM,
+                    gap: getGap(recap.id), isFirst: i === 0,
+                    onEdit: function() { setEditR(recap); },
+                    onDelete: function() { deleteRecap(recap.id); },
+                    onEditGap: function() { setEditG(recap.id); } });
+                }),
+                // Add-session button at end of timeline
+                canEdit && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 100, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
+                  React.createElement("div", { style: { width: "50%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), transparent)", marginBottom: 6, flexShrink: 0 } }),
+                  React.createElement("button", { onClick: function() { setEditR(false); },
+                    style: { width: 40, height: 40, borderRadius: "50%", border: "2px dashed var(--gold-deep)", background: "var(--bg-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gold-deep)", fontSize: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" } }, "+")))),
 
       // Modals
       React.createElement(RecapModal, { open: editR !== null, initial: editR || null, onClose: function() { setEditR(null); }, onSave: saveRecap }),

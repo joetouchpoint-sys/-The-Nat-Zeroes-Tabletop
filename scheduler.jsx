@@ -19,7 +19,46 @@
     const [discordLink, setDiscordLink] = useState(() => { try { return localStorage.getItem("nz_discordlink") || ""; } catch(e) { return ""; } });
     const [editingDiscord, setEditingDiscord] = useState(false);
     const [discordVal, setDiscordVal] = useState(discordLink);
+    const [copied, setCopied] = useState(false);
     function saveDiscord() { setDiscordLink(discordVal); try { localStorage.setItem("nz_discordlink", discordVal); } catch(e) {} setEditingDiscord(false); }
+
+    function exportICS() {
+      var lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Nat Zeroes//VTT//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:Nat Zeroes Sessions","X-WR-CALDESC:D&D session schedule for The Nat Zeroes"];
+      sess.filter(function(s) { return s.date; }).forEach(function(s) {
+        var parts = s.date.split("-").map(Number);
+        var y = parts[0], mo = parts[1], d = parts[2];
+        var hour = 19, min = 0;
+        var tm = s.time && s.time.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+        if (tm) { hour = parseInt(tm[1]); min = parseInt(tm[2]); if (tm[3] && tm[3].toUpperCase() === "PM" && hour !== 12) hour += 12; if (tm[3] && tm[3].toUpperCase() === "AM" && hour === 12) hour = 0; }
+        function p2(n) { return String(n).padStart(2,"0"); }
+        var dtStart = "" + y + p2(mo) + p2(d) + "T" + p2(hour) + p2(min) + "00";
+        var dtEnd = "" + y + p2(mo) + p2(d) + "T" + p2((hour+3)%24) + p2(min) + "00";
+        lines.push("BEGIN:VEVENT","UID:nz-session-" + s.id + "@natzeros","DTSTART:" + dtStart,"DTEND:" + dtEnd,
+          "SUMMARY:Session " + s.num + ": " + s.title,"LOCATION:" + (s.venue || "Online"),
+          "STATUS:" + (s.confirmed ? "CONFIRMED" : "TENTATIVE"),"END:VEVENT");
+      });
+      lines.push("END:VCALENDAR");
+      var blob = new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "nat-zeroes-sessions.ics"; a.click();
+    }
+
+    function copyForDiscord() {
+      var next = sess.find(function(s) { return s.confirmed; }) || sess[0];
+      if (!next) return;
+      var counts = { in: 0, maybe: 0, out: 0 };
+      (members || []).forEach(function(m) { var r = next.rsvp[m.id]; if (r) counts[r]++; });
+      var text = [
+        "📅 **Session " + next.num + ": " + next.title + "**",
+        "🗓️ " + fmtDate(next.date) + " at " + next.time,
+        "📍 " + next.venue,
+        next.confirmed ? "✅ **CONFIRMED**" : "⏳ Tentative — check availability poll",
+        "",
+        "👍 In: " + counts.in + "  ❔ Maybe: " + counts.maybe + "  👎 Out: " + counts.out
+      ].join("\n");
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() { setCopied(true); setTimeout(function() { setCopied(false); }, 2200); }).catch(function() { prompt("Copy for Discord:", text); });
+      } else { prompt("Copy for Discord:", text); }
+    }
 
     // your vote per option: derive from data (use ME dynamically)
     function myVote(o) {
@@ -44,21 +83,27 @@
     const nextConfirmed = sess.find((s) => s.confirmed) || sess[0];
 
     return React.createElement("div", { className: "view-pad", style: { maxWidth: 1100 } },
-      // Discord link bar
-      React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: 14, background: "var(--surface)", border: "1px solid var(--hair)", borderRadius: 12 } },
+      // Discord / calendar bar
+      React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20, padding: "12px 16px", background: "var(--surface)", border: "1px solid var(--hair)", borderRadius: 12, flexWrap: "wrap" } },
         React.createElement("span", { style: { fontSize: 20 } }, "🎮"),
         React.createElement("span", { style: { fontFamily: "var(--display)", fontWeight: 600, fontSize: 13, color: "var(--amethyst)", letterSpacing: "0.06em" } }, "GROUP DISCORD"),
         React.createElement("div", { className: "spacer" }),
         editingDiscord
           ? React.createElement(React.Fragment, null,
-              React.createElement("input", { className: "input", value: discordVal, onChange: (e) => setDiscordVal(e.target.value), placeholder: "Paste Discord invite link…", style: { width: 280 }, autoFocus: true, onKeyDown: (e) => e.key === "Enter" && saveDiscord() }),
+              React.createElement("input", { className: "input", value: discordVal, onChange: (e) => setDiscordVal(e.target.value), placeholder: "Paste Discord invite link…", style: { width: 260 }, autoFocus: true, onKeyDown: (e) => e.key === "Enter" && saveDiscord() }),
               React.createElement("button", { className: "btn primary sm", onClick: saveDiscord }, "Save"),
               React.createElement("button", { className: "btn ghost sm", onClick: () => setEditingDiscord(false) }, "Cancel"))
           : React.createElement(React.Fragment, null,
               discordLink
-                ? React.createElement("a", { href: discordLink, target: "_blank", rel: "noopener", className: "btn primary", style: { textDecoration: "none" } }, React.createElement(Icon, { name: "party", size: 16 }), "Open Discord")
+                ? React.createElement("a", { href: discordLink, target: "_blank", rel: "noopener", className: "btn primary sm", style: { textDecoration: "none" } }, React.createElement(Icon, { name: "party", size: 15 }), "Open Discord")
                 : React.createElement("span", { className: "muted", style: { fontSize: 13 } }, "No Discord link set"),
-              canEdit && React.createElement("button", { className: "btn sm ghost", onClick: () => { setDiscordVal(discordLink); setEditingDiscord(true); } }, React.createElement(Icon, { name: "settings", size: 13 }), "Edit"))),
+              canEdit && React.createElement("button", { className: "btn sm ghost", onClick: () => { setDiscordVal(discordLink); setEditingDiscord(true); } }, React.createElement(Icon, { name: "settings", size: 13 }), "Edit link"),
+              // Export calendar as .ics (importable to Google Calendar, Outlook, Apple Calendar)
+              React.createElement("button", { className: "btn sm ghost", onClick: exportICS, title: "Download sessions as a .ics calendar file — import into Google Calendar, Apple Calendar, Outlook, or any Discord bot that reads iCal feeds" },
+                React.createElement(Icon, { name: "upload", size: 14 }), "Export .ics"),
+              // Copy next session info formatted for Discord
+              React.createElement("button", { className: "btn sm" + (copied ? " primary" : " ghost"), onClick: copyForDiscord, title: "Copy next session details in Discord markdown format — paste into any Discord channel" },
+                copied ? "✓ Copied!" : (React.createElement(React.Fragment, null, React.createElement(Icon, { name: "party", size: 14 }), "Copy for Discord"))))),
       // weekly schedule
       React.createElement(WeeklySchedulePanel, { wsch, setWsch, canEdit, members }),
       // countdown + propose
