@@ -139,7 +139,7 @@
         expanded && recap.body && React.createElement("div", { style: { margin: "12px 8px 0", padding: 14, background: "var(--surface)", borderRadius: 12, fontSize: 13, color: SOFT, lineHeight: 1.65, textAlign: "left", maxWidth: 200, border: "1px solid var(--hair)", boxShadow: "0 4px 16px rgba(0,0,0,0.28)" } }, recap.body),
         // Emoji reactions — all users can react
         React.createElement(ReactionRow, { recapId: recap.id, reactions: recap.reactions || {}, onReact: onReact })
-      );
+      ));
   }
 
   // Inject CSS to hide native scrollbar on the timeline scroll container
