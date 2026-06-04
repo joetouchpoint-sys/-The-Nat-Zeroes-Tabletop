@@ -99,7 +99,7 @@
                 React.createElement("span", { className: "spacer" }),
                 React.createElement("span", { className: "muted", style: { fontSize: 12 } }, r.date)),
               React.createElement("p", { style: { margin: "0 0 8px", fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.55 } }, r.body),
-              React.createElement("div", { className: "row", style: { gap: 6, flexWrap: "wrap" } }, r.tags.map((t) => React.createElement("span", { key: t, style: { fontSize: 11, fontFamily: "var(--mono)", color: "var(--ink-dim)" } }, "#" + t.toLowerCase().replace(/[^a-z0-9]+/g, ""))))))))),
+              React.createElement("div", { className: "row", style: { gap: 6, flexWrap: "wrap" } }, (r.tags || []).map((t) => React.createElement("span", { key: t, style: { fontSize: 11, fontFamily: "var(--mono)", color: "var(--ink-dim)" } }, "#" + t.toLowerCase().replace(/[^a-z0-9]+/g, ""))))))))),
 
         // RIGHT column
         React.createElement("div", { className: "col", style: { gap: 20 } },

@@ -65,7 +65,7 @@
           React.createElement("span", { className: "tag" }, React.createElement(Icon, { name: "shield", size: 12 }), "AC " + e.ac)),
         React.createElement("p", { style: { margin: 0, fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.5, minHeight: 40 } }, e.blurb),
         React.createElement("div", { className: "row", style: { gap: 6, marginTop: 12, flexWrap: "wrap" } },
-          e.tags.map((t) => React.createElement("span", { key: t, style: { fontSize: 11, color: "var(--ink-dim)", fontFamily: "var(--mono)" } }, "#" + t.toLowerCase().replace(/\s/g, "")))))
+          (e.tags || []).map((t) => React.createElement("span", { key: t, style: { fontSize: 11, color: "var(--ink-dim)", fontFamily: "var(--mono)" } }, "#" + t.toLowerCase().replace(/\s/g, "")))))
     );
   }
 
