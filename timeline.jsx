@@ -117,6 +117,13 @@
         expanded && recap.body && React.createElement("div", { style: { margin: "12px 8px 0", padding: 14, background: "var(--surface)", borderRadius: 12, fontSize: 13, color: SOFT, lineHeight: 1.65, textAlign: "left", maxWidth: 200, border: "1px solid var(--hair)", boxShadow: "0 4px 16px rgba(0,0,0,0.28)" } }, recap.body)));
   }
 
+  // Inject CSS to hide native scrollbar on the timeline scroll container
+  if (typeof document !== "undefined" && !document.getElementById("nz-tl-css")) {
+    var tlStyle = document.createElement("style"); tlStyle.id = "nz-tl-css";
+    tlStyle.textContent = ".nz-tl-scroll::-webkit-scrollbar{display:none}.nz-tl-scroll{-ms-overflow-style:none;scrollbar-width:none}";
+    document.head.appendChild(tlStyle);
+  }
+
   // ── Main CampaignLog component ────────────────────────────────────────────
   function CampaignLog(props) {
     var recaps = props.recaps || [];
@@ -129,8 +136,52 @@
     var canEdit = window.NZAuth.can(ctx.role, "editWorld");
 
     var editingRecap = useState(null); var editR = editingRecap[0], setEditR = editingRecap[1];
-    var editingGap = useState(null); // { recapId } or null
+    var editingGap = useState(null);
     var editG = editingGap[0], setEditG = editingGap[1];
+
+    // Custom scroll state
+    var scrollRef = useRef(null);
+    var isDragScrollRef = useRef(false);
+    var dragScrollStartRef = useRef({ x: 0, sl: 0 });
+    var thumbLeftState = useState(0); var thumbLeft = thumbLeftState[0], setThumbLeft = thumbLeftState[1];
+    var thumbWidthState = useState(50); var thumbWidth = thumbWidthState[0], setThumbWidth = thumbWidthState[1];
+
+    useEffect(function() {
+      var el = scrollRef.current; if (!el) return;
+      function updateThumb() {
+        var sw = el.scrollWidth, cw = el.clientWidth, sl = el.scrollLeft;
+        if (sw <= cw) { setThumbWidth(100); setThumbLeft(0); return; }
+        var tw = Math.max(8, cw / sw * 100);
+        setThumbWidth(tw);
+        setThumbLeft(sl / (sw - cw) * (100 - tw));
+      }
+      function onDown(e) {
+        if (e.target.closest && e.target.closest("button")) return;
+        isDragScrollRef.current = true;
+        dragScrollStartRef.current = { x: e.clientX, sl: el.scrollLeft };
+        el.style.cursor = "grabbing"; el.style.userSelect = "none";
+        e.preventDefault();
+      }
+      function onMove(e) {
+        if (!isDragScrollRef.current) return;
+        el.scrollLeft = dragScrollStartRef.current.sl - (e.clientX - dragScrollStartRef.current.x);
+      }
+      function onUp() {
+        if (!isDragScrollRef.current) return;
+        isDragScrollRef.current = false;
+        if (el) { el.style.cursor = "grab"; el.style.userSelect = ""; }
+      }
+      el.addEventListener("scroll", updateThumb, { passive: true });
+      el.addEventListener("pointerdown", onDown);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      var ro = new ResizeObserver(updateThumb); ro.observe(el); updateThumb();
+      return function() {
+        el.removeEventListener("scroll", updateThumb); el.removeEventListener("pointerdown", onDown);
+        window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
+        ro.disconnect();
+      };
+    }, []);
 
     // Sort recaps by num ascending
     var sorted = recaps.slice().sort(function(a, b) { return (a.num || 0) - (b.num || 0); });
@@ -184,33 +235,75 @@
             React.createElement("span", { className: "muted", style: { fontSize: 11 } }, item[0]));
         })),
 
-      // Timeline scroll area — vertically centred
-      React.createElement("div", { style: { flex: 1, overflowX: "auto", overflowY: "auto", minHeight: 0,
-        background: "linear-gradient(180deg, var(--bg) 0%, rgba(232,181,74,0.03) 50%, var(--bg) 100%)" } },
-        sorted.length === 0
-          ? React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 220, gap: 14 } },
-              React.createElement(Icon, { name: "recap", size: 40, style: { color: DIM } }),
-              React.createElement("div", { className: "muted", style: { fontStyle: "italic" } }, "No sessions logged yet."),
-              canEdit && React.createElement("button", { className: "btn primary", onClick: function() { setEditR(false); } }, React.createElement(Icon, { name: "plus", size: 15 }), "Add first session"))
-          // Centering wrapper — makes the timeline row sit in the vertical middle of the scroll area
-          : React.createElement("div", { style: { display: "flex", alignItems: "center", minHeight: "100%", minWidth: "max-content", padding: "32px 48px" } },
-              React.createElement("div", { style: { display: "flex", alignItems: "flex-start", minWidth: "max-content", position: "relative" } },
-                // Continuous gold line — positioned at circle centre (PAD_TOP + half circle)
-                React.createElement("div", { style: { position: "absolute", height: 3, top: PAD_TOP + CIRCLE/2 - 1,
-                  left: 0, right: 0, pointerEvents: "none", zIndex: 0,
-                  background: "linear-gradient(90deg, transparent 0%, var(--gold-deep) 2%, var(--gold-bright) 20%, var(--gold-bright) 80%, var(--gold-deep) 98%, transparent 100%)" } }),
-                sorted.map(function(recap, i) {
-                  return React.createElement(SessionNode, { key: recap.id, recap: recap, num: recap.num || (i + 1), isDM: isDM,
-                    gap: getGap(recap.id), isFirst: i === 0,
-                    onEdit: function() { setEditR(recap); },
-                    onDelete: function() { deleteRecap(recap.id); },
-                    onEditGap: function() { setEditG(recap.id); } });
-                }),
-                // Add-session button at end of timeline
-                canEdit && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 100, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
-                  React.createElement("div", { style: { width: "50%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), transparent)", marginBottom: 6, flexShrink: 0 } }),
-                  React.createElement("button", { onClick: function() { setEditR(false); },
-                    style: { width: 40, height: 40, borderRadius: "50%", border: "2px dashed var(--gold-deep)", background: "var(--bg-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gold-deep)", fontSize: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" } }, "+")))),
+      // Timeline area — custom drag-scroll with gold scrollbar track + arrow buttons
+      React.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", minHeight: 0, position: "relative" } },
+        // Left arrow
+        React.createElement("button", { onClick: function() { scrollRef.current && scrollRef.current.scrollBy({ left: -320, behavior: "smooth" }); },
+          style: { position: "absolute", left: 0, top: 0, bottom: 28, zIndex: 6, width: 50, border: "none",
+            background: "linear-gradient(90deg, rgba(19,15,28,0.92) 0%, rgba(19,15,28,0.4) 70%, transparent 100%)",
+            color: "var(--gold)", cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center",
+            paddingLeft: 10, pointerEvents: "all", transition: "opacity .2s" } }, "‹"),
+        // Right arrow
+        React.createElement("button", { onClick: function() { scrollRef.current && scrollRef.current.scrollBy({ left: 320, behavior: "smooth" }); },
+          style: { position: "absolute", right: 0, top: 0, bottom: 28, zIndex: 6, width: 50, border: "none",
+            background: "linear-gradient(-90deg, rgba(19,15,28,0.92) 0%, rgba(19,15,28,0.4) 70%, transparent 100%)",
+            color: "var(--gold)", cursor: "pointer", fontSize: 28, display: "flex", alignItems: "center",
+            justifyContent: "flex-end", paddingRight: 10, pointerEvents: "all", transition: "opacity .2s" } }, "›"),
+        // Scroll container (native scrollbar hidden, drag-to-scroll active)
+        React.createElement("div", { ref: scrollRef, className: "nz-tl-scroll",
+          style: { flex: 1, overflowX: "auto", overflowY: "hidden", minHeight: 0, cursor: "grab",
+            background: "linear-gradient(180deg, var(--bg) 0%, rgba(232,181,74,0.03) 50%, var(--bg) 100%)" } },
+          sorted.length === 0
+            ? React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 220, gap: 14 } },
+                React.createElement(Icon, { name: "recap", size: 40, style: { color: DIM } }),
+                React.createElement("div", { className: "muted", style: { fontStyle: "italic" } }, "No sessions logged yet."),
+                canEdit && React.createElement("button", { className: "btn primary", onClick: function() { setEditR(false); } }, React.createElement(Icon, { name: "plus", size: 15 }), "Add first session"))
+            : React.createElement("div", { style: { display: "flex", alignItems: "center", minHeight: "100%", minWidth: "max-content", padding: "32px 56px" } },
+                React.createElement("div", { style: { display: "flex", alignItems: "flex-start", minWidth: "max-content", position: "relative" } },
+                  React.createElement("div", { style: { position: "absolute", height: 3, top: PAD_TOP + CIRCLE/2 - 1,
+                    left: 0, right: 0, pointerEvents: "none", zIndex: 0,
+                    background: "linear-gradient(90deg, transparent 0%, var(--gold-deep) 2%, var(--gold-bright) 20%, var(--gold-bright) 80%, var(--gold-deep) 98%, transparent 100%)" } }),
+                  sorted.map(function(recap, i) {
+                    return React.createElement(SessionNode, { key: recap.id, recap: recap, num: recap.num || (i + 1), isDM: isDM,
+                      gap: getGap(recap.id), isFirst: i === 0,
+                      onEdit: function() { setEditR(recap); },
+                      onDelete: function() { deleteRecap(recap.id); },
+                      onEditGap: function() { setEditG(recap.id); } });
+                  }),
+                  canEdit && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", width: 100, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
+                    React.createElement("div", { style: { width: "50%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), transparent)", marginBottom: 6, flexShrink: 0 } }),
+                    React.createElement("button", { onClick: function() { setEditR(false); },
+                      style: { width: 40, height: 40, borderRadius: "50%", border: "2px dashed var(--gold-deep)", background: "var(--bg-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--gold-deep)", fontSize: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" } }, "+"))))),
+        // Custom gold scrollbar track
+        React.createElement("div", {
+          style: { height: 28, display: "flex", alignItems: "center", padding: "0 58px",
+            borderTop: "1px solid var(--hair)", background: "var(--bg-2)", flexShrink: 0, cursor: "pointer" },
+          onClick: function(e) {
+            var el = scrollRef.current; if (!el || el.scrollWidth <= el.clientWidth) return;
+            var rect = e.currentTarget.getBoundingClientRect();
+            var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left - 58) / (rect.width - 116)));
+            el.scrollLeft = ratio * (el.scrollWidth - el.clientWidth);
+          }
+        },
+          React.createElement("div", { style: { position: "relative", flex: 1, height: 10, background: "var(--surface-2)", borderRadius: 5, border: "1px solid var(--hair)", overflow: "hidden" } },
+            React.createElement("div", {
+              style: { position: "absolute", top: 0, bottom: 0,
+                left: thumbLeft + "%", width: thumbWidth + "%",
+                background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))",
+                borderRadius: 5, cursor: "grab", boxShadow: "0 0 10px rgba(232,181,74,0.35)" },
+              onPointerDown: function(e) {
+                e.stopPropagation();
+                var el = scrollRef.current; if (!el) return;
+                var startX = e.clientX, startScroll = el.scrollLeft;
+                var trackW = e.currentTarget.parentElement.clientWidth;
+                function mv(ev) {
+                  var ratio = (ev.clientX - startX) / trackW;
+                  el.scrollLeft = startScroll + ratio * (el.scrollWidth - el.clientWidth);
+                }
+                function up() { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); }
+                window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+              }
+            })))),
 
       // Modals
       React.createElement(RecapModal, { open: editR !== null, initial: editR || null, onClose: function() { setEditR(null); }, onSave: saveRecap }),

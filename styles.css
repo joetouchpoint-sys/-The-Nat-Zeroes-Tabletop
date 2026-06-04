@@ -349,34 +349,87 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 600; margin: 0; lette
 /* ============================================================
    Mobile / tablet responsive layout
    ============================================================ */
-@media (max-width: 768px) {
-  .app { grid-template-columns: 0 1fr !important; }
-  .app.rail-open { grid-template-columns: 220px 1fr !important; }
 
+/* Rail backdrop — hidden by default, shown when rail is open on mobile */
+.rail-backdrop {
+  display: none;
+  position: fixed; inset: 0; z-index: 199;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 768px) {
+  /* App: full width, rail is an overlay */
+  .app { grid-template-columns: 1fr !important; }
+
+  /* Rail: slide-in overlay */
   .rail {
-    position: fixed !important; left: 0; top: 0; bottom: 0; z-index: 100;
-    transform: translateX(-100%); transition: transform 0.25s ease;
-    box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+    width: 240px !important;
+    position: fixed !important; left: 0; top: 0; bottom: 0;
+    z-index: 200;
+    transform: translateX(-110%);
+    transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 6px 0 32px rgba(0,0,0,0.7);
   }
   .rail.mobile-open { transform: translateX(0); }
-  .rail.collapsed { width: 60px !important; transform: translateX(0); }
+  .rail.mobile-open ~ .rail-backdrop,
+  .rail-backdrop.visible { display: block; }
 
-  .topbar { padding: 0 16px; gap: 10px; }
+  /* Topbar */
+  .topbar { height: 56px; padding: 0 12px; gap: 8px; }
   .topbar .crumb h1 { font-size: 17px; }
   .topbar .crumb .eyebrow { display: none; }
 
-  .view-pad { padding: 16px 14px 60px; }
+  /* Touch-friendly tap targets */
+  .btn { min-height: 44px; padding: 10px 16px; }
+  .btn.sm { min-height: 40px; padding: 9px 13px; font-size: 12.5px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .nav-item { padding: 14px 13px; min-height: 48px; }
 
-  /* Stack battle map on mobile: no right sidebar, panel below */
+  /* Account pill: hide role badge on small screens */
+  .acct-pill .tag { display: none !important; }
+
+  /* Views */
+  .view-pad { padding: 14px 12px 80px; }
+  .view { -webkit-overflow-scrolling: touch; }
   .main { overflow-x: hidden; }
+
+  /* Panels: prevent overflow */
+  .panel { border-radius: var(--r); }
+
+  /* Inputs and selects: prevent iOS zoom (font-size >= 16px) */
+  .input, .select, textarea.input { font-size: 16px; }
+
+  /* Dice tray: wider on mobile */
+  .panel.rise { left: 8px !important; right: 8px !important; width: auto !important; }
+
+  /* Section title: smaller */
+  .section-title { font-size: 11px; letter-spacing: 0.16em; }
+
+  /* Row wrapping */
+  .row { flex-wrap: wrap; }
 }
 
 @media (max-width: 480px) {
-  .login-card { padding: 28px 20px; }
+  /* Login card */
+  .login-card { padding: 28px 18px; }
+  .login-card h2 { font-size: 20px; }
 
-  /* Dice tray full-width on small screens */
-  .panel.rise {
-    left: 8px !important; right: 8px !important;
-    bottom: 8px !important; width: auto !important;
-  }
+  /* Topbar: even more compact */
+  .topbar { height: 52px; padding: 0 10px; gap: 6px; }
+  .topbar .crumb h1 { font-size: 15px; }
+
+  /* View padding */
+  .view-pad { padding: 10px 8px 80px; }
+
+  /* Buttons on mobile: full-tap-friendly */
+  .btn { font-size: 13.5px; }
+  .btn.sm { font-size: 12px; min-height: 38px; }
+
+  /* Tags wrap */
+  .tag { font-size: 10px; padding: 3px 8px; }
+
+  /* Section titles compact */
+  .section-title { margin-bottom: 10px; }
 }

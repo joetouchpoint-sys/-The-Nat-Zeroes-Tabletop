@@ -171,7 +171,7 @@
 
     const navItems = NAV.filter((n) => allowed.includes(n.id));
 
-    const go = (v) => { if (allowed.includes(v)) setView(v); };
+    const go = (v) => { if (allowed.includes(v)) { setView(v); setMobileRailOpen(false); } };
     const openMap = (mapId) => { setPendingMap(mapId); setView("map"); };
     const meta = NAV.find((n) => n.id === view) || NAV[0];
     const roleInfo = Auth.ROLES[role];
@@ -197,6 +197,8 @@
                 React.createElement("span", { className: "n" }, user.name),
                 React.createElement("span", { className: "s" }, roleInfo.label)),
               React.createElement(Icon, { name: "chevD", size: 16, style: { color: "var(--ink-dim)" } })))),
+        // Rail backdrop — closes rail when tapped outside on mobile
+        React.createElement("div", { className: "rail-backdrop" + (mobileRailOpen ? " visible" : ""), onClick: () => setMobileRailOpen(false) }),
 
         // ===== main =====
         React.createElement("div", { className: "main" },
