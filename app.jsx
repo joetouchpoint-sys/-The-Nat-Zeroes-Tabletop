@@ -249,7 +249,7 @@
       React.createElement("div", { className: "row", style: { marginBottom: 20, gap: 12, alignItems: "center" } },
         React.createElement("p", { className: "muted", style: { margin: 0, flex: 1, maxWidth: 560 } }, "The official record of poor decisions. ", stats.sessionsPlayed, " sessions, ", stats.nat1s, " natural ones, and zero (0) total party kills \u2014 somehow."),
         React.createElement("button", { className: "btn ghost", onClick: () => {
-          const text = recaps.map((r) => "=== Ep " + r.num + ": " + r.title + " (" + r.date + ") ===\n" + r.body + "\nTags: " + r.tags.join(", ") + "\n").join("\n");
+          const text = recaps.map((r) => "=== Ep " + r.num + ": " + r.title + " (" + (r.date || "") + ") ===\n" + (r.body || "") + "\nTags: " + (r.tags || []).join(", ") + "\n").join("\n");
           const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" })); a.download = "nat-zeroes-recaps.txt"; a.click();
         } }, React.createElement(Icon, { name: "upload", size: 16 }), "Export"),
         canEdit && React.createElement("button", { className: "btn primary", onClick: () => setEditing(false) },
@@ -267,7 +267,7 @@
               canEdit && React.createElement("button", { className: "btn sm ghost", onClick: () => deleteRecap(r.id), style: { padding: "3px 8px", fontSize: 11, color: "var(--red-bright)" } }, React.createElement(Icon, { name: "skull", size: 12 }), "Delete")),
             React.createElement("h2", { style: { fontSize: 21, marginBottom: 10, color: "var(--ink)" } }, r.title),
             React.createElement("p", { style: { margin: "0 0 12px", fontSize: 14.5, color: "var(--ink-soft)", lineHeight: 1.6 } }, r.body),
-            React.createElement("div", { className: "row", style: { gap: 7, flexWrap: "wrap" } }, r.tags.map((t) => React.createElement("span", { key: t, className: "tag", style: { fontSize: 11 } }, t))))))),
+            React.createElement("div", { className: "row", style: { gap: 7, flexWrap: "wrap" } }, (r.tags || []).map((t) => React.createElement("span", { key: t, className: "tag", style: { fontSize: 11 } }, t))))))),
       React.createElement(RecapModal, { open: editing !== null, initial: editing || null, onClose: () => setEditing(null), onSave: saveRecap }));
   }
 

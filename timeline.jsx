@@ -32,7 +32,7 @@
         React.createElement("div", { className: "field" }, React.createElement("label", null, "Tags (comma-separated)"), React.createElement("input", { className: "input", value: f.tags, onChange: function(e) { up("tags", e.target.value); }, placeholder: "Combat, TPK avoided, Nat 1 of the night" })),
         React.createElement("div", { className: "row", style: { justifyContent: "flex-end", gap: 10 } },
           React.createElement("button", { className: "btn ghost", onClick: onClose }, "Cancel"),
-          React.createElement("button", { className: "btn primary", disabled: !f.title, onClick: function() { onSave(Object.assign({}, initial, { title: f.title, date: f.date, body: f.body, tags: f.tags.split(",").map(function(t) { return t.trim(); }).filter(Boolean) })); } }, isEdit ? "Save" : "Add session"))));
+          React.createElement("button", { className: "btn primary", disabled: !f.title, onClick: function() { onSave(Object.assign({}, initial, { title: f.title, date: f.date, body: f.body, tags: (f.tags || "").split(",").map(function(t) { return t.trim(); }).filter(Boolean) })); } }, isEdit ? "Save" : "Add session"))));
   }
 
   // ── GapModal (add/edit gap between two sessions) ─────────────────────────
