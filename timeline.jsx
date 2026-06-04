@@ -74,11 +74,14 @@
     var expandState = useState(false); var expanded = expandState[0], setExpanded = expandState[1];
     var isFirst = props.isFirst;
     return React.createElement("div", { style: { display: "flex", alignItems: "flex-start", flex: "none" } },
-      // Gap connector — always shown; first session gets a short lead-in cap, others get full connector with labels
-      React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: isFirst ? 40 : 90, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
-        React.createElement("div", { style: { width: "100%", height: 3, background: isFirst
-          ? "linear-gradient(90deg, transparent, var(--gold-deep))"
-          : "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", flexShrink: 0 } }),
+      // Gap connector — always rendered; first = short |---- cap, others = full connector with labels
+      React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: isFirst ? 44 : 90, paddingTop: PAD_TOP + CIRCLE/2 - 1, flex: "none" } },
+        isFirst
+          // |---- start cap: vertical tick + horizontal line
+          ? React.createElement("div", { style: { position: "relative", width: "100%", height: 3 } },
+              React.createElement("div", { style: { position: "absolute", left: 0, top: -7, width: 3, height: 17, background: "var(--gold-deep)", borderRadius: "2px 2px 0 0" } }),
+              React.createElement("div", { style: { position: "absolute", left: 0, top: 0, right: 0, height: 3, background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright))" } }))
+          : React.createElement("div", { style: { width: "100%", height: 3, background: "linear-gradient(90deg, var(--gold-deep), var(--gold-bright), var(--gold-deep))", flexShrink: 0 } }),
         !isFirst && React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: 8, zIndex: 2 } },
           gap && gap.time && React.createElement("div", { style: { fontSize: 10, fontFamily: "var(--mono)", color: DIM, background: "var(--bg-2)", border: "1px solid var(--hair)", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap", boxShadow: "0 2px 6px rgba(0,0,0,0.2)" } }, gap.time),
           gap && (gap.events || []).map(function(ev) { return React.createElement("div", { key: ev.id, style: { fontSize: 10, color: SOFT, background: "var(--surface)", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", maxWidth: 95, overflow: "hidden", textOverflow: "ellipsis" } }, "· " + ev.title); }),
@@ -146,7 +149,12 @@
     }
     function saveRecap(r) {
       if (r.id) { setRecaps(function(rs) { return rs.map(function(x) { return x.id === r.id ? r : x; }); }); }
-      else { setRecaps(function(rs) { return [Object.assign({}, r, { id: "r" + Date.now(), num: rs.length + 1 })].concat(rs); }); }
+      else {
+        setRecaps(function(rs) {
+          var maxNum = rs.reduce(function(m, x) { return Math.max(m, x.num || 0); }, 0);
+          return rs.concat([Object.assign({}, r, { id: "r" + Date.now(), num: maxNum + 1 })]);
+        });
+      }
       setEditR(null);
     }
     function deleteRecap(id) { if (confirm("Delete this session?")) { setRecaps(function(rs) { return rs.filter(function(r) { return r.id !== id; }); }); } }

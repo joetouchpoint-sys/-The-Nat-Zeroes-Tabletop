@@ -141,11 +141,9 @@
 
       function onContainerPointerDown(ev) {
         if (ev.button !== 0) return;
-        const t = ev.target;
-        if (t.closest("button") || t.closest(".path-ctrl")) return;
-        if (t.tagName === "circle" || t.tagName === "text" || t.tagName === "polyline" || t.tagName === "line") return;
-        // Freehand drawing takes priority over panning
+        // Freehand check FIRST — can draw starting from a pin or any other element
         if (freehandActiveRef.current && canEdit) {
+          ev.preventDefault(); // prevents pin click/drag from firing
           const rect = el.getBoundingClientRect();
           const pt = screenToMapPct(ev, rect);
           freehandPtsRef.current = [pt];
@@ -154,6 +152,9 @@
           window.addEventListener("pointerup", onFreehandUp);
           return;
         }
+        const t = ev.target;
+        if (t.closest("button") || t.closest(".path-ctrl")) return;
+        if (t.tagName === "circle" || t.tagName === "text" || t.tagName === "polyline" || t.tagName === "line") return;
         panDragRef.current = { startX: ev.clientX, startY: ev.clientY, origPanX: panX, origPanY: panY };
         window.addEventListener("pointermove", onContainerPointerMove);
         window.addEventListener("pointerup", onContainerPointerUp);
@@ -360,7 +361,7 @@
             active: sel === l.id || pathingFrom === l.id,
             isPathingFrom: pathingFrom === l.id,
             onClick: () => handlePinClick(l.id),
-            onPointerDown: canEdit && !drawingPath ? (e) => onPinPointerDown(e, l) : null }))),
+            onPointerDown: canEdit && !drawingPath && !freehand ? (e) => onPinPointerDown(e, l) : null }))),
 
         // ===== Top controls bar =====
         React.createElement("div", { style: { position: "absolute", top: 16, left: 20, right: 20, zIndex: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" } },
@@ -530,6 +531,36 @@
       var ceil = new T.Mesh(new T.PlaneGeometry(80, 80), new T.MeshStandardMaterial({ color: 0x120e1a, roughness: 1.0 }));
       ceil.rotation.x = Math.PI/2; ceil.position.y = -5 + wH; scene.add(ceil);
 
+      // Wooden table — the world map card rests on this
+      var woodCv = document.createElement("canvas"); woodCv.width = 256; woodCv.height = 256;
+      var woc = woodCv.getContext("2d");
+      woc.fillStyle = "#4a2e12"; woc.fillRect(0, 0, 256, 256);
+      for (var i = 0; i < 40; i++) {
+        woc.strokeStyle = "rgba(" + (30+Math.floor(Math.random()*20)) + "," + (18+Math.floor(Math.random()*10)) + ",8," + (0.18+Math.random()*0.22) + ")";
+        woc.lineWidth = 1 + Math.random()*2;
+        woc.beginPath(); woc.moveTo(Math.random()*256, 0); woc.lineTo(Math.random()*256, 256); woc.stroke();
+      }
+      var woodTex = new T.CanvasTexture(woodCv); woodTex.wrapS = T.RepeatWrapping; woodTex.wrapT = T.RepeatWrapping; woodTex.repeat.set(4, 2);
+      var tableMat = new T.MeshStandardMaterial({ map: woodTex, roughness: 0.82, metalness: 0.02 });
+      var legMat = new T.MeshStandardMaterial({ color: 0x3d2210, roughness: 0.88 });
+      // Table top — wide enough to hold the world map card
+      var tableTop = new T.Mesh(new T.BoxGeometry(20, 0.45, 13), tableMat);
+      tableTop.position.set(0, -1.6, 0); tableTop.receiveShadow = true; tableTop.castShadow = true; scene.add(tableTop);
+      // Table edge trim
+      var trimMat = new T.MeshStandardMaterial({ color: 0x6b4020, roughness: 0.9 });
+      [[20.4, 0.5, 0.35, 0, 0, 6.3],[20.4, 0.5, 0.35, 0, 0, -6.3],[0.35, 0.5, 13, 9.8, 0, 0],[-9.8, 0, 0]].forEach(function(p, pi) {
+        if (pi < 3) { var trim = new T.Mesh(new T.BoxGeometry(p[0],p[1],p[2]), trimMat); trim.position.set(p[3], -1.6, p[5]); scene.add(trim); }
+      });
+      // 4 legs
+      var legH = 4.2, legY = -1.6 - 0.22 - legH/2;
+      [[8.8, -5.7],[- 8.8, -5.7],[8.8, 5.7],[-8.8, 5.7]].forEach(function(p) {
+        var leg = new T.Mesh(new T.BoxGeometry(0.6, legH, 0.6), legMat);
+        leg.position.set(p[0], legY, p[1]); leg.castShadow = true; leg.receiveShadow = true; scene.add(leg);
+        var foot = new T.Mesh(new T.BoxGeometry(0.85, 0.14, 0.85), legMat);
+        foot.position.set(p[0], legY - legH/2 + 0.07, p[1]); scene.add(foot);
+      });
+      // Remove the small plinth (table replaces it)
+
       // Wall torches with flickering point lights
       var torchMat = new T.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.88 });
       var flameMat = new T.MeshStandardMaterial({ color: 0xff9030, emissive: 0xff5010, emissiveIntensity: 1.4, roughness: 0.5 });
@@ -541,15 +572,6 @@
         flame.position.set(pos[0], pos[1]+0.32, pos[2]); flame.scale.set(1, 1.3, 1); scene.add(flame); torchFlames.push(flame);
         var pl = new T.PointLight(0xff7020, 2.5, 22);
         pl.position.set(pos[0], pos[1]+0.4, pos[2]); scene.add(pl); torchLights.push(pl);
-      });
-
-      // A map stand/plinth on the floor beneath the tilted card
-      var plinthMat = new T.MeshStandardMaterial({ color: 0x3d2810, roughness: 0.85 });
-      var plinth = new T.Mesh(new T.BoxGeometry(3, 0.3, 2.2), plinthMat);
-      plinth.position.set(0, -5, 1); plinth.receiveShadow = true; plinth.castShadow = true; scene.add(plinth);
-      [[-1.1,-4.85,0.8],[1.1,-4.85,0.8],[-1.1,-4.85,-0.8],[1.1,-4.85,-0.8]].forEach(function(p) {
-        var leg = new T.Mesh(new T.BoxGeometry(0.2, 0.6, 0.2), plinthMat);
-        leg.position.set(p[0],p[1],p[2]); scene.add(leg);
       });
 
       var raf, t = 0;
